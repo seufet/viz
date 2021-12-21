@@ -141,7 +141,7 @@ var uniqueSeries;
 
 	
 // date parser function
-var parseDate = d3.timeParse("%m/%d/%Y");
+var parseDate = d3.timeParse("%Y/%m/%d");
 
 // SELECT BUTTONS
 
@@ -158,7 +158,7 @@ var groups = {
 
 // basic configuration
 var statesSelectedStr = "MA,NJ,RI";
-var startDate = parseDate("05/01/2021");
+var startDate = parseDate("2021/05/01");
 var endDate = new Date();
 var paletteStr = "black,blue,orange,gray,red";
 
@@ -230,7 +230,6 @@ function loadPage(error, data) {
 	console.log("MA POP=" + popLookup["MA"]);
 	
 	// build a record lookup by date
-	hhsData = hhsData.filter(function(d,i){ return d.date != null && d.date.getTime() != null; });
 	let dateLookup = {};
 	hhsData.forEach(function(d) {
 		pop = popLookup[d.state];
