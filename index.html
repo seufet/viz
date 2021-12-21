@@ -199,9 +199,9 @@ d3.select("#selectButton")
 // Chained callback functions to read the data
 function hhsLoaded(error, data) {
 	console.log("hhsLoaded: " + data.length);
-	hhsData = data;
+	hhsData =  data;
 	
-	d3.csv("state_pop.csv", statePopLoaded);
+	d3.csv("https://github.com/seufet/viz/state_pop.csv", statePopLoaded);
 }
 
 function statePopLoaded(error, data) {
