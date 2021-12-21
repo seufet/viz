@@ -230,7 +230,7 @@ function loadPage(error, data) {
 	console.log("MA POP=" + popLookup["MA"]);
 	
 	// build a record lookup by date
-	hhsData = hhsData.filter(function(d,i){ return d.date != null; });
+	hhsData = hhsData.filter(function(d,i){ return d.date != null && d.date.getTime() != null; });
 	let dateLookup = {};
 	hhsData.forEach(function(d) {
 		pop = popLookup[d.state];
