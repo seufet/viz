@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+	<title>Covid-19 Surge Comparison</title>
+</head>
+
+<style>
+.loader {
+  border: 16px solid #f3f3f3; /* Light grey */
+  border-top: 16px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 120px;
+  height: 120px;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.svg-container {
+    display: block;
+    position: relative;
+    width: 92.5%;
+	height: 20%;
+	margin-left: 30px;
+    vertical-align: top;
+    overflow: visible;
+	padding-bottom: 40%;
+}
+#tooltip {
+	position:relative;
+}
+.svg-content {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+#ttl {
+  font-size: 36px;
+  font-weight: bold;		
+  padding-left:10px;
+  padding-top:20px;
+  padding-bottom:0px;
+}
+.lnk {
+	float: left;
+	width: 90%;
+	font-size: 18px;
+	font-size: 16px;
+	padding-bottom: 5px;
+	padding-top: 5px;
+	padding-left: 10px;
+}
+#selectButton {
+	height: 30px;
+}
+#main {
+  width: 90%;
+  height: 60px;
+  border: 2px solid #000000;
+  margin-left: 40px;
+  padding-left: 10px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+#controls {
+  width: 90%;
+  height: 100px;
+  border: 2px solid #000000;
+  margin-left: 40px;
+  margin-top: 10px;
+  padding-left: 20px;
+  padding-bottom: 5px;
+  padding-top: 10px;
+}
+</style>
+
+<!-- Load d3.js -->
+<script src="https://d3js.org/d3.v4.js"></script>
+
+<body>
+<div id="main">
+<span id="ttl">Covid-19 Surge Comparison</span>
+<span class="lnk"><a href="explanation.html">What is this?</a></span>
+</div>
+
+<!-- Initialize a select button -->
+<div id="controls">
+<b>Data: </b><select id="selectButton"></select>
+</div>
+
+
+<!-- Create a div where the graph will take place -->
+<div id="container" class="svg-container"></div>
+
+</body>
+
+<script>
+
+/* <div class="loader"></div>
+	ToDo: 
+	-don't use a drop-down if possible; maybe check boxes for data to include
+	-store real date, charted date, series name to differentiate prior years for tool tip
+	-legend
+	-better tool tip: https://bl.ocks.org/dianaow/0da76b59a7dffe24abcfa55d5b9e163e (also shows legend)
+	-relate same state/different surge - same color, different stroke type
+*/
+
+
+////////////////////////////////////////////////////////////////////////
+// GLOBALS
+
+// set the dimensions and margins of the graph
+var margin = {top: 10, right: 30, bottom: 30, left: 60},
+    width = 800 - margin.left - margin.right,
+    height = 350 - margin.top - margin.bottom;
+
+var chartHeight = 350 - 75;
+
+// append the svg object to the body of the page
+var svg = d3.select("div#container")
+  .append("svg")
+  .attr("preserveAspectRatio", "xMidYMid meet")
+  .attr("viewBox", "0 0 800 400")
+  .classed("svg-content", true)
+  .append("g")
+    .attr("transform",
+          "translate(" + margin.left + "," + margin.top + ")");
+
+// data globals
+var hhsData;
+var nytData;
+var statePop;
+
+var y, yAxis;
+var x, xAxis;
+var sumstat;
+var uniqueSeries;
+
+	
+// date parser function
+var parseDate = d3.timeParse("%m/%d/%Y");
+
+// SELECT BUTTONS
+
+// the currently selected group
+groupSelected = "ip_covid_ma";
+
+// Map column names to user-friendly descriptions
+var groups = {
+	ip_covid_ma : "Covid Hospitalized",
+	ip_covid_100k_ma : "Covid Hospitalized (per 100k)",
+	deaths_covid_ma : "Covid Deaths",
+	deaths_covid_100k_ma : "Covid Deaths (per 100k)"
+};
+
+// basic configuration
+var statesSelectedStr = "MA,NJ,RI";
+var startDate = parseDate("05/01/2021");
+var endDate = new Date();
+var paletteStr = "black,blue,orange,gray,red";
+
+// process the config
+let dataLowerLimit = new Date(startDate.getFullYear(),startDate.getMonth(),startDate.getDate()-7);
+
+var statesSelected = statesSelectedStr.split(",");
+statesSelected.sort();
+
+// state palette
+var color = d3.scaleOrdinal()
+	.domain(statesSelected)
+	.range(paletteStr.split(","));
+
+// add the options to the button
+d3.select("#selectButton")
+  .selectAll('myOptions')
+	.data(Object.keys(groups))
+  .enter()
+	.append('option')
+  .text(d => groups[d]) // text showed in the menu
+  .attr("value", d => d) // co2responding value returned by the button
+
+	// Credit: HealthData.gov: 
+	// Download: https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD
+	//d3.csv("hhs_data_full.csv", hhsLoaded);
+	d3.csv("https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD", hhsLoaded);
+
+////////////////////////////////////////////////////////////////////////////////////////
+// End of main script
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// UTILITY FUNCTIONS
+
+
+// Chained callback functions to read the data
+function hhsLoaded(error, data) {
+	console.log("hhsLoaded: " + data.length);
+	hhsData = data;
+	
+	d3.csv("state_pop.csv", statePopLoaded);
+}
+
+function statePopLoaded(error, data) {
+	statePop = data;
+	console.log("statePopData: " + statePop.length);
+	
+	// Credit: NY Times, https://github.com/nytimes/covid-19-data
+	// Download: https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv	
+	//d3.csv("nyt_data.csv", loadPage);
+	d3.csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv", loadPage);
+}
+
+
+
+// Finish getting the page ready after our data sets are loaded
+function loadPage(error, data) {
+	// pre-process the data sets
+	nytData = data;
+	console.log("nytData: " + nytData.length);
+	
+	let popLookup = {};
+	statePop.forEach(d => {
+		d.population = d.population.replace(/,/g,""); // strip out any commas
+		popLookup[d.state] = parseInt(d.population);
+	});
+	console.log("MA POP=" + popLookup["MA"]);
+	
+	// build a record lookup by date
+	let dateLookup = {};
+	hhsData.forEach(function(d) {
+		pop = popLookup[d.state];
+		d.dateStr = d.date;
+		d.series = d.state + ", " + "2021-2";
+		d.date = parseDate(d.date);
+		d.ip_covid = parseInt(d.inpatient_beds_used_covid);
+		d.deaths_covid = parseInt(d.deaths_covid);
+		d.ip_covid_100k = 100000*d.ip_covid/pop;
+		d.deaths_covid_100k = 100000*d.deaths_covid/pop;
+		d.pk = d.series + "-" + d.date.getTime();
+		dateLookup[d.pk] = d;
+	});
+	
+	// prior year records
+	let priorYear = [];
+	
+	// add records for the needed columns
+	hhsData.forEach(function(d) {
+		// make a copy of the data for a year earlier than d, and add it to the priorYear array with a modified state name
+		// this enables us to have lines for the same state/date, but with the prior year records having a false date
+		let priorDate = new Date(d.date.getFullYear()-1,d.date.getMonth(),d.date.getDate());
+		let priorRow = Object.assign({}, dateLookup[d.series+"-"+priorDate.getTime()]);
+		
+		// if prior row exists, add it to the priorYear array
+		if (priorRow != null) {
+			priorRow.series = d.state + ", " + "2020-1";
+			priorRow.date = d.date;
+			priorRow.dateStr = d.dateStr;
+			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
+			priorYear.push(priorRow);
+			/*if (d.state == "MA" && d.date > parseDate("11/01/2021")) {
+				console.log(d.series + "-->" + priorRow.series);
+				console.log(d.date + "-->" + priorRow.date);
+				console.log(d.ip_covid + "-->" + priorRow.ip_covid);
+				console.log(d.deaths_covid + "-->" + priorRow.deaths_covid);
+			}*/
+		}
+	});
+
+	console.log("data size: " + hhsData.length);
+	console.log("priorYear size: " + priorYear.length);
+	hhsData = hhsData.concat(priorYear);
+	//data = priorYear;
+	console.log("combined data size: " + hhsData.length);
+	
+	// filter by date, state, etc
+	hhsData = hhsData.filter(function(d,i){ return statesSelected.indexOf(d.state) >= 0 && d.date > dataLowerLimit; });
+	console.log("post size: " + hhsData.length);
+	
+	// IMPORTANT: make sure we're still sorted by date, else the lines will scribble all over in the wrong order!
+	hhsData.sort((a, b) => (a.date > b.date) ? 1 : -1);
+    
+	//////////////////////////////////////////////////////////////////////////////////	
+	// Compute 7-day moving averages for each series
+		
+	// get set of unique series
+	uniqueSeries = Array.from(new Set(hhsData.map(d => d.series)));
+	uniqueSeries.sort();
+	console.log(uniqueSeries);
+	
+	uniqueSeries.forEach(series => {
+		maDays = 7;
+		seriesData = hhsData.filter(d => d.series == series);
+		seriesData.sort((a, b) => (a.date > b.date) ? 1 : -1);
+		console.log(series + ": " + seriesData.length);
+		seriesData[0].deaths_covid_rollsum = seriesData[0].deaths_covid;
+		seriesData[0].ip_covid_rollsum = seriesData[0].ip_covid;
+		seriesData[0].deaths_covid_100k_rollsum = seriesData[0].deaths_covid_100k;
+		seriesData[0].ip_covid_100k_rollsum = seriesData[0].ip_covid_100k;
+		for (var i = 1 ; i < seriesData.length ; i++) {
+			seriesData[i].deaths_covid_rollsum = seriesData[i-1].deaths_covid_rollsum + seriesData[i].deaths_covid;
+			seriesData[i].ip_covid_rollsum = seriesData[i-1].ip_covid_rollsum + seriesData[i].ip_covid;
+			
+			seriesData[i].deaths_covid_100k_rollsum = seriesData[i-1].deaths_covid_100k_rollsum + seriesData[i].deaths_covid_100k;
+			seriesData[i].ip_covid_100k_rollsum = seriesData[i-1].ip_covid_100k_rollsum + seriesData[i].ip_covid_100k;
+		}
+		for (var i = 0 ; i < seriesData.length ; i++) {
+			if (i<maDays) {
+				seriesData[i].deaths_covid_ma = 0;
+				seriesData[i].ip_covid_ma = 0;
+				seriesData[i].deaths_covid_100k_ma = 0;
+				seriesData[i].ip_covid_100k_ma = 0;
+			}
+			else {
+				seriesData[i].deaths_covid_ma = (seriesData[i].deaths_covid_rollsum-seriesData[i-maDays].deaths_covid_rollsum)/maDays;
+				seriesData[i].ip_covid_ma = (seriesData[i].ip_covid_rollsum-seriesData[i-maDays].ip_covid_rollsum)/maDays;
+				seriesData[i].deaths_covid_100k_ma = (seriesData[i].deaths_covid_100k_rollsum-seriesData[i-maDays].deaths_covid_100k_rollsum)/maDays;
+				seriesData[i].ip_covid_100k_ma = (seriesData[i].ip_covid_100k_rollsum-seriesData[i-maDays].ip_covid_100k_rollsum)/maDays;
+			}
+			//data[i].deaths_covid_rollsum = data[i-1].deaths_covid_rollsum + data[i].deaths_covid;
+		}
+	});
+	
+
+  // group the data: I want to draw one line per group
+  sumstat = d3.nest() // nest function allows to group the calculation per level of a factor
+	.key(function(d) { return d.series;})
+    .entries(hhsData);
+
+  // Add X axis --> it is a date format
+  plottedData = hhsData.filter((d,i) => d.date > startDate);
+  x = d3.scaleTime()
+    .domain(d3.extent(plottedData, function(d) { return d.date; }))
+    .range([ 0, width ]);
+  svg.append("g")
+    .attr("transform", "translate(0," + (height-75) + ")")
+    .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%b")));
+
+  // Add Y axis
+  y = d3.scaleLinear()
+    .domain([0, d3.max(hhsData, function(d) { return +d.ip_covid_ma; })])
+    .range([ height-75, 0 ]);
+  yAxis = d3.axisLeft().scale(y);
+  svg.append("g")  
+  .attr("class","myYaxis")
+  .call(yAxis);
+
+	// When the button is changed, run the updateChart function
+    d3.select("#selectButton").on("change", function(d) {
+        // recover the option that has been chosen
+        groupSelected = d3.select(this).property("value")
+        // run the updateChart function with this selected option
+        update()
+    })
+	
+	// CREATE HOVER TOOLTIP WITH VERTICAL LINE //
+  // https://bl.ocks.org/dianaow/0da76b59a7dffe24abcfa55d5b9e163e
+  tooltip = d3.select("div#container").append("div")
+	.attr('id', 'tooltip')
+	//.style('position', 'absolute')
+	.style("background-color", "#D3D3D3")
+	.style('padding', 6)
+	.style('display', 'none')
+
+  mouseG = svg.append("g")
+	.attr("class", "mouse-over-effects");
+
+  mouseG.append("path") // create vertical line to follow mouse
+	.attr("class", "mouse-line")
+	.style("stroke", "#A9A9A9")
+	.style("stroke-width", "2px")
+	.style("opacity", "0");
+
+  var mousePerLine = mouseG.selectAll('.mouse-per-line')
+	.data(sumstat)
+	.enter()
+	.append("g")
+	.attr("class", "mouse-per-line");
+
+  mousePerLine.append("circle")
+	.attr("r", 4)
+	.style("stroke", d => {
+		return color(d.key.substring(0,2));
+	})
+	.style("fill", "none")
+	.style("stroke-width", "2px")
+	.style("opacity", "0");
+
+  mouseG.append('svg:rect') // append a rect to catch mouse movements on canvas
+	.attr('width', width) 
+	.attr('height', height)
+	.attr('fill', 'none')
+	.attr('pointer-events', 'all')
+	.on('mouseout', function () { // on mouse out hide line, circles and text
+	  d3.select(".mouse-line")
+		.style("opacity", "0");
+	  d3.selectAll(".mouse-per-line circle")
+		.style("opacity", "0");
+	  d3.selectAll(".mouse-per-line text")
+		.style("opacity", "0");
+	  d3.selectAll("#tooltip")
+		.style('display', 'none')
+	})
+	.on('mouseover', function () { // on mouse in show line, circles and text
+	  d3.select(".mouse-line")
+		.style("opacity", "1");
+	  d3.selectAll(".mouse-per-line circle")
+		.style("opacity", "1");
+	  d3.selectAll("#tooltip")
+		.style('display', 'block')
+	})
+	.on('mousemove', function () { // update tooltip content, line, circles and text when mouse moves
+	  var mouse = d3.mouse(this)  
+
+	  d3.selectAll(".mouse-per-line")
+		.attr("transform", function (d, i) {
+		  var xDate = x.invert(mouse[0]) // use 'invert' to get date corresponding to distance from mouse position relative to svg
+		  var bisect = d3.bisector(function (d) { return d.date; }).left // retrieve row index of date on parsed csv
+		  var idx = bisect(d.values, xDate);
+
+		  // this somehow specifies the vertical mouseline as a string...
+		  d3.select(".mouse-line")
+			.attr("d", function () {
+			  var data = "M" + x(d.values[idx].date) + "," + (chartHeight-40);
+			  data += " " + x(d.values[idx].date) + "," + 0;
+			  return data;
+			});
+			// position box based on x/y
+		  return "translate(" + x(d.values[idx].date) + "," + y(d.values[idx][groupSelected]) + ")";
+
+		}); // end attr statement
+
+	  updateTooltipContent(mouse, sumstat)
+
+	})
+
+	// start off with a selection
+	update();
+} // end of loadPage() 
+
+// A function that updates the chart
+function update() {
+	var data = hhsData;
+	
+	// update y axis (x axis stays same for now) with 1s transition
+	y.domain([0, d3.max(data, function(d) { return +d[groupSelected]  }) ]);
+	svg.selectAll(".myYaxis")
+		.transition()
+		.duration(1000)
+		.call(yAxis);
+
+	// Create a update selection: bind to the new data
+	  var u = svg.selectAll(".lineTest").data(sumstat);
+	
+	  // Draw the lines
+	  u.enter()
+		.append("path")
+		.attr("class","lineTest")
+		.merge(u)
+		.transition()
+		.duration(1000)
+		.attr("d", function(d){
+			return d3.line()
+				// this clips the lines so they won't go beyond the axis limit!
+				.defined(d => d.date > startDate)
+				.x(function(d) { return x(d.date); })
+				.y(function(d) { return y(+d[groupSelected]); })
+				(d.values)
+		})
+	  .attr("fill", "none")
+	  //.attr("stroke", d => stateColors[d.key.substring(0,2)])
+	  .attr("stroke", d => color(d.key.substring(0,2)))
+	  .style("stroke-width", 2)
+		.style("stroke-dasharray", (d) => d.key.endsWith("-2") ? "3,0" : "3,3" )
+	
+	// Add a short line in the legend for each entry.
+	var lineLength = 20;
+	var totalLength = 200;
+	svg.selectAll(".legendLines")
+	  .data(uniqueSeries)
+	  .enter()
+	  .append("line")
+		.attr("class","legendLines")
+		.attr("x1", (d,i) => i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2)
+		.attr("x2", (d,i) => lineLength+(i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2))
+		.attr("y1", d => d.endsWith("2") ? height-40 : height-25)
+		.attr("y2", d => d.endsWith("2") ? height-40 : height-25)
+		//.style("stroke", d => stateColors[d.substring(0,2)])
+		.attr("stroke", d => color(d.substring(0,2)))
+		.style("stroke-width", 2)
+		.style("stroke-dasharray", (d) => d.endsWith("-2") ? "3,0" : "3,3" )
+
+	// Add legend text
+	svg.selectAll(".legendText")
+	  .data(uniqueSeries)
+	  .enter()
+	  .append("text")
+		.attr("class","legendText")
+		.attr("x", (d,i) => 5+lineLength+(i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2))
+		.attr("y", d => d.endsWith("2") ? height-39 : height-24)
+		//.style("fill", d => stateColors[d.substring(0,2)])
+		.style("fill", d => color(d.substring(0,2)))
+		.style("font", "12px times")
+		.text(function(d){ return d})
+		.attr("text-anchor", "left")
+		.style("alignment-baseline", "middle")
+		
+	
+}
+
+  
+function updateTooltipContent(mouse) {
+
+// populate sortingObj with EACH match in the various groups
+sortingObj = []
+sumstat.map(d => {
+	  var xDate = x.invert(mouse[0])
+	  var bisect = d3.bisector(d => d.date).left
+	  var idx = bisect(d.values, xDate)
+	  sortingObj.push(
+		{	
+			key: d.values[idx].series, 
+			num: d.values[idx][groupSelected],
+			date: d.values[idx].date
+		})
+	}) // close map()
+
+	// sort them by premium, descending
+	sortingObj.sort(function(x, y){
+	   return d3.descending(x.num, y.num);
+	})
+
+	// strip keys
+	var sortingArr = sortingObj.map(d=> d.key)
+
+	// rank vehicle category based on # of output variable
+	var sumstat1 = sumstat.slice().sort((a, b) => (sortingArr.indexOf(a.key) - sortingArr.indexOf(b.key)))
+
+	//console.log("pageX=" + d3.event.pageX + " pageY=" + d3.event.pageY);
+
+	// now the text
+	tooltip.html(sortingObj[0].date.toLocaleDateString('en-us', { year:"numeric", month:"short", day:"numeric"}))
+  //.style('display', 'inline')
+  .style('left', (d3.event.pageX>400?d3.event.pageX-350:d3.event.pageX) + "px")
+  .style('top', (d3.event.pageY - 220) + "px")
+  .style('width', "300px")
+  .style('font-size', 11.5)
+  .style('font-weight', "bold")
+  .selectAll()
+  .data(sumstat1).enter() // for each vehicle category, list out name and price of premium
+  .append('div')
+  .style('color', d => {
+	var xDate = x.invert(mouse[0])
+	var bisect = d3.bisector(d => d.date).left
+	var idx = bisect(d.values, xDate)
+	return color(d.values[idx].state)
+  })
+  .style('font-size', 10)
+  .html(d => {
+	var xDate = x.invert(mouse[0])
+	var bisect = d3.bisector(d => d.date).left
+	var idx = bisect(d.values, xDate)
+	return d.key + ": " + d.values[idx][groupSelected];
+  })
+}
+
+</script>
