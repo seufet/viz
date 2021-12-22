@@ -66,8 +66,13 @@
 }
 #selectButton {
 	height: 30px;
+	margin-right: 20px;
 }
 .stateButton {
+	height: 30px;
+	padding-left: 10px;
+}
+.startDateButton {
 	height: 30px;
 	padding-left: 10px;
 }
@@ -122,7 +127,7 @@
 
 <!-- Initialize a select button -->
 <div id="controls">
- <span id="selectSpan"><b>Data: </b><select id="selectButton"></select></span><br>
+ <span id="selectSpan"><b>Data: </b><select id="selectButton"></select><b>Start Date:</b><select id="startDateButton"></select></span><br>
  <span id="stateSpan"><b>States: </b>
 	<select id="state1" class="stateButton"></select>
 	<select id="state2" class="stateButton"></select>
@@ -219,14 +224,23 @@ var decimals = {
 	deaths_100k_ma : 2
 };
 
+var startMonths = {
+	"May, 2021":"2021/05/01",
+	"June, 2021":"2021/06/01",
+	"July, 2021":"2021/07/01",
+	"August, 2021":"2021/08/01",
+	"September, 2021":"2021/09/01",
+	"October, 2021":"2021/10/01",
+	"November, 2021":"2021/11/01",
+	"December, 2021":"2021/12/01"
+};
+
 // basic configuration
 var statesSelectedStr = "MA,NH,RI";
-var startDate = parseDate("2021/05/01");
+var defaultStartDate = "2021/06/01";
 var endDate = new Date();
 var paletteStr = "black,blue,brown,gray,red";
 
-// process the config
-let dataLowerLimit = new Date(startDate.getFullYear(),startDate.getMonth(),startDate.getDate()-7);
 
 
 
@@ -265,7 +279,7 @@ function statePopLoaded(error, data) {
 // utility to set value of a select box
 function selectElement(id, valueToSelect) {    
 	let element = document.getElementById(id);
-	element.value = valueToSelect;
+	if (element != null) element.value = valueToSelect;
 }
 
 function elementValue(id) {
@@ -299,6 +313,15 @@ function loadPage(error, nyt) {
 	  .text(d => groups[d]) // text showed in the menu
 	  .attr("value", d => d) // co2responding value returned by the button
 
+	// add the options to the StartDate button
+	d3.select("#startDateButton")
+	  .selectAll('myOptions')
+		.data(Object.keys(startMonths))
+	  .enter()
+		.append('option')
+	  .text(d => d) // text showed in the menu
+	  .attr("value", d => startMonths[d]) // co2responding value returned by the button
+
 //data.sort((a, b) => (a.date > b.date) ? 1 : -1);
 	stateSort = Object.keys(stateNameLookup).sort((a,b) => (a == "None" ? -1 : b == "None" ? 1 : a>b ? 1 : -1));
 	d3.selectAll(".stateButton")
@@ -316,6 +339,7 @@ function loadPage(error, nyt) {
 			selectElement("state"+(i+1),statesSelected[i]);
 		}
 	}
+	selectElement("startDateButton",defaultStartDate);
 
 	// prepare a lookup for the nyt info, note we leave date as a yyyy-mm-dd string
 	// nyt data set uses full state names, so we have to map
@@ -424,6 +448,11 @@ function update() {
 	.html(titlePrefix + groups[groupSelected])
 	
 	// filter by date, state, etc
+	// process the config
+	startDate = parseDate(elementValue("startDateButton"));
+	console.log("Start Date:" + startDate);
+	
+	let dataLowerLimit = new Date(startDate.getFullYear(),startDate.getMonth(),startDate.getDate()-7);
 	data = data.filter(function(d,i){ return statesSelected.indexOf(d.state) >= 0 && d.date >= dataLowerLimit; });
 	console.log("post size: " + data.length);
 	
@@ -483,12 +512,15 @@ function update() {
 	
   // Add X axis --> it is a date format
   plottedData = data.filter((d,i) => d.date >= startDate);
+  svg.selectAll(".myXAxis").remove();
   x = d3.scaleTime()
     .domain(d3.extent(plottedData, function(d) { return d.date; }))
     .range([ 0, width ]);
+  xAxis = d3.axisBottom(x).scale(x).tickFormat(d3.timeFormat("%b %d"));
   svg.append("g")
+	.attr("class","myXAxis")
     .attr("transform", "translate(0," + (height-75) + ")")
-    .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%b")));
+    .call(xAxis);
 
   // Add Y axis
   y = d3.scaleLinear()
@@ -510,7 +542,10 @@ function update() {
 	d3.selectAll(".stateButton").on("change", function(d) {
         update()
     })
-	
+	// update if new state chosen
+	d3.select("#startDateButton").on("change", function(d) {
+        update()
+    })
 	
 
   mouseG = svg.append("g")
