@@ -30,6 +30,17 @@
 }
 #tooltip {
 	position:relative;
+	border: 2px solid dimgray;
+	background-color: lightgray;
+	padding-bottom: 5px;
+	padding-left: 5px;
+	padding-top: 5px;
+	font-weight: bold;
+	font-size: 18px;
+}
+.tt-div {
+	font-size: 14px;
+	font-weight: bold;
 }
 .svg-content {
     display: block;
@@ -56,6 +67,18 @@
 #selectButton {
 	height: 30px;
 }
+.stateButton {
+	height: 30px;
+	padding-left: 10px;
+}
+#stateSpan {
+	padding-top: 10px;
+	height: 30px;
+	display: block;
+}
+#selectSpan {
+	padding-left: 10px;
+}
 #main {
   width: 90%;
   height: 60px;
@@ -71,10 +94,21 @@
   border: 2px solid #000000;
   margin-left: 40px;
   margin-top: 10px;
-  padding-left: 20px;
+  padding-left: 10px;
   padding-bottom: 5px;
   padding-top: 10px;
 }
+#chart-title {
+  width: 90%;
+  height: 20px;
+  margin-left: 40px;
+  margin-top: 10px;
+  padding-left: 10px;
+  font-weight: bold;
+  font-size: 20px;
+  text-align: center;
+}
+
 </style>
 
 <!-- Load d3.js -->
@@ -82,18 +116,27 @@
 
 <body>
 <div id="main">
-<span id="ttl">Covid-19 Surge Comparison</span>
+<span id="ttl">Covid-19 Surge Comparison by US State</span>
 <span class="lnk"><a href="explanation.html">What is this?</a></span>
 </div>
 
 <!-- Initialize a select button -->
 <div id="controls">
-<b>Data: </b><select id="selectButton"></select>
+ <span id="selectSpan"><b>Data: </b><select id="selectButton"></select></span><br>
+ <span id="stateSpan"><b>States: </b>
+	<select id="state1" class="stateButton"></select>
+	<select id="state2" class="stateButton"></select>
+	<select id="state3" class="stateButton"></select>
+	<select id="state4" class="stateButton"></select>
+	<select id="state5" class="stateButton"></select>
+</span>
 </div>
 
 
 <!-- Create a div where the graph will take place -->
+<div id="chart-title"></div>
 <div id="container" class="svg-container"></div>
+
 
 </body>
 
@@ -102,15 +145,22 @@
 /* <div class="loader"></div>
 	ToDo: 
 	-don't use a drop-down if possible; maybe check boxes for data to include
-	-store real date, charted date, series name to differentiate prior years for tool tip
-	-legend
-	-better tool tip: https://bl.ocks.org/dianaow/0da76b59a7dffe24abcfa55d5b9e163e (also shows legend)
-	-relate same state/different surge - same color, different stroke type
+	-find max dates for nyt, hhs series and note
+	
+	-Credits:
+	Tooltips: https://bl.ocks.org/dianaow/0da76b59a7dffe24abcfa55d5b9e163e
+	Case, death data: NY Times, https://github.com/nytimes/covid-19-data
+	Hospitalization, death data: HealthData.gov, https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD
+	
 */
 
 
 ////////////////////////////////////////////////////////////////////////
 // GLOBALS
+
+// title prefix
+var titlePrefix = "Pandemic Comparison by Year: ";
+var lastSeriesLength = 0;
 
 // set the dimensions and margins of the graph
 var margin = {top: 10, right: 30, bottom: 30, left: 60},
@@ -118,6 +168,8 @@ var margin = {top: 10, right: 30, bottom: 30, left: 60},
     height = 350 - margin.top - margin.bottom;
 
 var chartHeight = 350 - 75;
+
+var titleDiv;
 
 // append the svg object to the body of the page
 var svg = d3.select("div#container")
@@ -146,46 +198,42 @@ var parseDate = d3.timeParse("%Y/%m/%d");
 // SELECT BUTTONS
 
 // the currently selected group
-groupSelected = "ip_covid_ma";
+groupSelected = "cases_ma";
 
 // Map column names to user-friendly descriptions
 var groups = {
+	cases_ma : "Covid Cases",
+	cases_100k_ma : "Covid Cases (per 100k)",
 	ip_covid_ma : "Covid Hospitalized",
 	ip_covid_100k_ma : "Covid Hospitalized (per 100k)",
-	deaths_covid_ma : "Covid Deaths",
-	deaths_covid_100k_ma : "Covid Deaths (per 100k)"
+	deaths_ma : "Covid Deaths",
+	deaths_100k_ma : "Covid Deaths (per 100k)"
+};
+
+var decimals = {
+	cases_ma : 0,
+	cases_100k_ma : 0,
+	ip_covid_ma : 0,
+	ip_covid_100k_ma : 1,
+	deaths_ma : 1,
+	deaths_100k_ma : 2
 };
 
 // basic configuration
-var statesSelectedStr = "MA,NJ,RI";
+var statesSelectedStr = "MA,NH,RI";
 var startDate = parseDate("2021/05/01");
 var endDate = new Date();
-var paletteStr = "black,blue,orange,gray,red";
+var paletteStr = "black,blue,brown,gray,red";
 
 // process the config
 let dataLowerLimit = new Date(startDate.getFullYear(),startDate.getMonth(),startDate.getDate()-7);
 
-var statesSelected = statesSelectedStr.split(",");
-statesSelected.sort();
 
-// state palette
-var color = d3.scaleOrdinal()
-	.domain(statesSelected)
-	.range(paletteStr.split(","));
 
-// add the options to the button
-d3.select("#selectButton")
-  .selectAll('myOptions')
-	.data(Object.keys(groups))
-  .enter()
-	.append('option')
-  .text(d => groups[d]) // text showed in the menu
-  .attr("value", d => d) // co2responding value returned by the button
-
-	// Credit: HealthData.gov: 
-	// Download: https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD
-	//d3.csv("hhs_data_full.csv", hhsLoaded);
-	d3.csv("https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD", hhsLoaded);
+// Credit: HealthData.gov: 
+// Download: https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD
+//d3.csv("hhs_data_full.csv", hhsLoaded);
+d3.csv("https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD", hhsLoaded);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // End of main script
@@ -214,34 +262,97 @@ function statePopLoaded(error, data) {
 	d3.csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv", loadPage);
 }
 
+// utility to set value of a select box
+function selectElement(id, valueToSelect) {    
+	let element = document.getElementById(id);
+	element.value = valueToSelect;
+}
 
+function elementValue(id) {
+	let element = document.getElementById(id);
+	return element.value;
+}
 
 // Finish getting the page ready after our data sets are loaded
-function loadPage(error, data) {
+function loadPage(error, nyt) {
 	// pre-process the data sets
-	nytData = data;
+	nytData = nyt;
 	console.log("nytData: " + nytData.length);
 	
+	// clean the state population info
 	let popLookup = {};
+	let stateNameLookup = {"None":"XX"};
 	statePop.forEach(d => {
 		d.population = d.population.replace(/,/g,""); // strip out any commas
 		popLookup[d.state] = parseInt(d.population);
+		stateNameLookup[d.full_name] = d.state;
+		//console.log(d.full_name + "-" + d.state);
 	});
 	console.log("MA POP=" + popLookup["MA"]);
+
+	// add the options to the data button
+	d3.select("#selectButton")
+	  .selectAll('myOptions')
+		.data(Object.keys(groups))
+	  .enter()
+		.append('option')
+	  .text(d => groups[d]) // text showed in the menu
+	  .attr("value", d => d) // co2responding value returned by the button
+
+//data.sort((a, b) => (a.date > b.date) ? 1 : -1);
+	stateSort = Object.keys(stateNameLookup).sort((a,b) => (a == "None" ? -1 : b == "None" ? 1 : a>b ? 1 : -1));
+	d3.selectAll(".stateButton")
+	  .selectAll('myOptions')
+		.data(stateSort)
+	  .enter()
+		.append('option')
+	  .text(d => d) // text showed in the menu
+	  .attr("value", d => stateNameLookup[d]) // co2responding value returned by the button
+
+	// default values for states
+	statesSelected = statesSelectedStr.split(",");
+	for (i=0; i<statesSelected.length; i++){
+		if (statesSelected[i] != null) {
+			selectElement("state"+(i+1),statesSelected[i]);
+		}
+	}
+
+	// prepare a lookup for the nyt info, note we leave date as a yyyy-mm-dd string
+	// nyt data set uses full state names, so we have to map
+	let nytLookup = {};
+	nytData.forEach(d => {
+		let pk = stateNameLookup[d.state] + "-" + d.date;
+		nytLookup[pk] = d;
+	});
 	
 	// build a record lookup by date
-	let dateLookup = {};
+	let hhsLookup = {};
 	hhsData.forEach(function(d) {
-		pop = popLookup[d.state];
-		d.dateStr = d.date;
-		d.series = d.state + ", " + "2021-2";
+		d.dateStr = d.date.replace(/\//g,"-"); // replace / with -
+		d.surge = "Year 2";
+		d.series = d.state + ", " + d.surge;
 		d.date = parseDate(d.date);
 		d.ip_covid = parseInt(d.inpatient_beds_used_covid);
 		d.deaths_covid = parseInt(d.deaths_covid);
+		
+		nytRow = nytLookup[d.state + "-" + d.dateStr];
+		if (nytRow != null) {
+			d.cases = parseFloat(nytRow.cases);
+			d.cases_ma = parseFloat(nytRow.cases_avg);
+			d.cases_100k_ma = parseFloat(nytRow.cases_avg_per_100k);
+			d.deaths = parseFloat(nytRow.deaths);
+			d.deaths_ma = parseFloat(nytRow.deaths_avg);
+			d.deaths_100k_ma = parseFloat(nytRow.deaths_avg_per_100k);
+			//if (d.state == "MA") console.log(d.dateStr + "-" + d.cases);
+		} else {
+			//console.log("missing nyt data: " + d.state + "-" + d.dateStr);
+		}
+		
+		pop = popLookup[d.state];
 		d.ip_covid_100k = 100000*d.ip_covid/pop;
 		d.deaths_covid_100k = 100000*d.deaths_covid/pop;
 		d.pk = d.series + "-" + d.date.getTime();
-		dateLookup[d.pk] = d;
+		hhsLookup[d.pk] = d;
 	});
 	
 	// prior year records
@@ -252,21 +363,20 @@ function loadPage(error, data) {
 		// make a copy of the data for a year earlier than d, and add it to the priorYear array with a modified state name
 		// this enables us to have lines for the same state/date, but with the prior year records having a false date
 		let priorDate = new Date(d.date.getFullYear()-1,d.date.getMonth(),d.date.getDate());
-		let priorRow = Object.assign({}, dateLookup[d.series+"-"+priorDate.getTime()]);
+		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+priorDate.getTime()]);
 		
 		// if prior row exists, add it to the priorYear array
 		if (priorRow != null) {
-			priorRow.series = d.state + ", " + "2020-1";
+			priorRow.surge = "Year 1";
+			priorRow.series = d.state + ", " + priorRow.surge;
 			priorRow.date = d.date;
 			priorRow.dateStr = d.dateStr;
 			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
 			priorYear.push(priorRow);
-			/*if (d.state == "MA" && d.date > parseDate("11/01/2021")) {
-				console.log(d.series + "-->" + priorRow.series);
-				console.log(d.date + "-->" + priorRow.date);
-				console.log(d.ip_covid + "-->" + priorRow.ip_covid);
-				console.log(d.deaths_covid + "-->" + priorRow.deaths_covid);
-			}*/
+			d.prior = priorRow;
+			// 100 --> 125 = 25% inc
+			//d.ip_covid_pct_change = (parseFloat(d.ip_covid) / priorRow.ip_covid)-1;
+			//d.deaths_covid_pct_change = (parseFloat(d.deaths_covid) / priorRow.deaths_covid)-1;
 		}
 	});
 
@@ -275,27 +385,64 @@ function loadPage(error, data) {
 	hhsData = hhsData.concat(priorYear);
 	//data = priorYear;
 	console.log("combined data size: " + hhsData.length);
+
+	// CREATE HOVER TOOLTIP WITH VERTICAL LINE //
+  // https://bl.ocks.org/dianaow/0da76b59a7dffe24abcfa55d5b9e163e
+  tooltip = d3.select("div#container").append("div")
+	.attr('id', 'tooltip')
+	//.style('position', 'absolute')
+	.style('padding', 6)
+	.style('display', 'none')
+
+	
+
+	// start off with a selection
+	update();
+} // end of loadPage() 
+
+// A function that updates the chart
+function update() {
+	console.log("update!");
+	var data = hhsData;
+
+	let statesSelected = [];
+	for (i=1; i<=5; i++){
+		let v = elementValue("state"+i);
+		if (v != null && v != "XX"){
+			statesSelected.push(v);
+		}
+	}
+	statesSelected.sort();
+
+	// state palette
+	var color = d3.scaleOrdinal()
+	.domain(statesSelected)
+	.range(paletteStr.split(","));
+	
+	// update title
+  d3.select("div#chart-title")
+	.html(titlePrefix + groups[groupSelected])
 	
 	// filter by date, state, etc
-	hhsData = hhsData.filter(function(d,i){ return statesSelected.indexOf(d.state) >= 0 && d.date > dataLowerLimit; });
-	console.log("post size: " + hhsData.length);
+	data = data.filter(function(d,i){ return statesSelected.indexOf(d.state) >= 0 && d.date >= dataLowerLimit; });
+	console.log("post size: " + data.length);
 	
 	// IMPORTANT: make sure we're still sorted by date, else the lines will scribble all over in the wrong order!
-	hhsData.sort((a, b) => (a.date > b.date) ? 1 : -1);
+	data.sort((a, b) => (a.date > b.date) ? 1 : -1);
     
 	//////////////////////////////////////////////////////////////////////////////////	
 	// Compute 7-day moving averages for each series
 		
 	// get set of unique series
-	uniqueSeries = Array.from(new Set(hhsData.map(d => d.series)));
+	uniqueSeries = Array.from(new Set(data.map(d => d.series)));
 	uniqueSeries.sort();
 	console.log(uniqueSeries);
 	
 	uniqueSeries.forEach(series => {
 		maDays = 7;
-		seriesData = hhsData.filter(d => d.series == series);
+		seriesData = data.filter(d => d.series == series);
 		seriesData.sort((a, b) => (a.date > b.date) ? 1 : -1);
-		console.log(series + ": " + seriesData.length);
+		//console.log(series + ": " + seriesData.length);
 		seriesData[0].deaths_covid_rollsum = seriesData[0].deaths_covid;
 		seriesData[0].ip_covid_rollsum = seriesData[0].ip_covid;
 		seriesData[0].deaths_covid_100k_rollsum = seriesData[0].deaths_covid_100k;
@@ -328,10 +475,14 @@ function loadPage(error, data) {
   // group the data: I want to draw one line per group
   sumstat = d3.nest() // nest function allows to group the calculation per level of a factor
 	.key(function(d) { return d.series;})
-    .entries(hhsData);
+    .entries(data);
 
+	// update title
+  d3.select("div#chart-title")
+	.html(titlePrefix + groups[groupSelected])
+	
   // Add X axis --> it is a date format
-  plottedData = hhsData.filter((d,i) => d.date > startDate);
+  plottedData = data.filter((d,i) => d.date >= startDate);
   x = d3.scaleTime()
     .domain(d3.extent(plottedData, function(d) { return d.date; }))
     .range([ 0, width ]);
@@ -341,7 +492,7 @@ function loadPage(error, data) {
 
   // Add Y axis
   y = d3.scaleLinear()
-    .domain([0, d3.max(hhsData, function(d) { return +d.ip_covid_ma; })])
+    .domain([0, d3.max(data, function(d) { return +d.ip_covid_ma; })])
     .range([ height-75, 0 ]);
   yAxis = d3.axisLeft().scale(y);
   svg.append("g")  
@@ -355,15 +506,12 @@ function loadPage(error, data) {
         // run the updateChart function with this selected option
         update()
     })
+	// update if new state chosen
+	d3.selectAll(".stateButton").on("change", function(d) {
+        update()
+    })
 	
-	// CREATE HOVER TOOLTIP WITH VERTICAL LINE //
-  // https://bl.ocks.org/dianaow/0da76b59a7dffe24abcfa55d5b9e163e
-  tooltip = d3.select("div#container").append("div")
-	.attr('id', 'tooltip')
-	//.style('position', 'absolute')
-	.style("background-color", "#D3D3D3")
-	.style('padding', 6)
-	.style('display', 'none')
+	
 
   mouseG = svg.append("g")
 	.attr("class", "mouse-over-effects");
@@ -383,6 +531,9 @@ function loadPage(error, data) {
   mousePerLine.append("circle")
 	.attr("r", 4)
 	.style("stroke", d => {
+		var color = d3.scaleOrdinal()
+		.domain(statesSelected)
+		.range(paletteStr.split(","));
 		return color(d.key.substring(0,2));
 	})
 	.style("fill", "none")
@@ -421,7 +572,7 @@ function loadPage(error, data) {
 		  var bisect = d3.bisector(function (d) { return d.date; }).left // retrieve row index of date on parsed csv
 		  var idx = bisect(d.values, xDate);
 
-		  // this somehow specifies the vertical mouseline as a string...
+		  // this specifies the vertical mouseline as a string...
 		  d3.select(".mouse-line")
 			.attr("d", function () {
 			  var data = "M" + x(d.values[idx].date) + "," + (chartHeight-40);
@@ -432,18 +583,8 @@ function loadPage(error, data) {
 		  return "translate(" + x(d.values[idx].date) + "," + y(d.values[idx][groupSelected]) + ")";
 
 		}); // end attr statement
-
-	  updateTooltipContent(mouse, sumstat)
-
+		updateTooltipContent(mouse, sumstat);
 	})
-
-	// start off with a selection
-	update();
-} // end of loadPage() 
-
-// A function that updates the chart
-function update() {
-	var data = hhsData;
 	
 	// update y axis (x axis stays same for now) with 1s transition
 	y.domain([0, d3.max(data, function(d) { return +d[groupSelected]  }) ]);
@@ -453,7 +594,12 @@ function update() {
 		.call(yAxis);
 
 	// Create a update selection: bind to the new data
-	  var u = svg.selectAll(".lineTest").data(sumstat);
+	if (uniqueSeries.length != lastSeriesLength){
+		svg.selectAll(".lineTest").remove();
+	}
+	lastSeriesLength = uniqueSeries.length;
+	var u = svg.selectAll(".lineTest").data(sumstat);
+	//	u.remove();
 	
 	  // Draw the lines
 	  u.enter()
@@ -465,7 +611,7 @@ function update() {
 		.attr("d", function(d){
 			return d3.line()
 				// this clips the lines so they won't go beyond the axis limit!
-				.defined(d => d.date > startDate)
+				.defined(d => d.date >= startDate)
 				.x(function(d) { return x(d.date); })
 				.y(function(d) { return y(+d[groupSelected]); })
 				(d.values)
@@ -474,41 +620,64 @@ function update() {
 	  //.attr("stroke", d => stateColors[d.key.substring(0,2)])
 	  .attr("stroke", d => color(d.key.substring(0,2)))
 	  .style("stroke-width", 2)
-		.style("stroke-dasharray", (d) => d.key.endsWith("-2") ? "3,0" : "3,3" )
+	  // Year 2 not dashed, Year 1 dashed
+		.style("stroke-dasharray", (d) => d.key.endsWith("Year 2") ? "3,0" : "3,3" )
 	
+	console.log("UNIQUE SERIES: " + uniqueSeries);
 	// Add a short line in the legend for each entry.
 	var lineLength = 20;
-	var totalLength = 200;
-	svg.selectAll(".legendLines")
-	  .data(uniqueSeries)
+	var totalLength = 120;
+	svg.selectAll(".legendLines").remove();
+	legendLines = svg.selectAll(".legendLines").data(uniqueSeries);
+	legendLines
 	  .enter()
 	  .append("line")
+	  .merge(legendLines)
 		.attr("class","legendLines")
 		.attr("x1", (d,i) => i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2)
 		.attr("x2", (d,i) => lineLength+(i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2))
-		.attr("y1", d => d.endsWith("2") ? height-40 : height-25)
-		.attr("y2", d => d.endsWith("2") ? height-40 : height-25)
+		.attr("y1", d => d.endsWith("Year 1") ? height-40 : height-25)
+		.attr("y2", d => d.endsWith("Year 1") ? height-40 : height-25)
 		//.style("stroke", d => stateColors[d.substring(0,2)])
 		.attr("stroke", d => color(d.substring(0,2)))
 		.style("stroke-width", 2)
-		.style("stroke-dasharray", (d) => d.endsWith("-2") ? "3,0" : "3,3" )
+		.style("stroke-dasharray", (d) => d.endsWith("Year 2") ? "3,0" : "3,3" )
 
 	// Add legend text
-	svg.selectAll(".legendText")
-	  .data(uniqueSeries)
+	svg.selectAll(".legendText").remove();
+	legendText = svg.selectAll(".legendText")
+	  .data(uniqueSeries);
+	 legendText
 	  .enter()
 	  .append("text")
+		.merge(legendText)
 		.attr("class","legendText")
 		.attr("x", (d,i) => 5+lineLength+(i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2))
-		.attr("y", d => d.endsWith("2") ? height-39 : height-24)
+		.attr("y", d => d.endsWith("Year 1") ? height-39 : height-24)
 		//.style("fill", d => stateColors[d.substring(0,2)])
 		.style("fill", d => color(d.substring(0,2)))
 		.style("font", "12px times")
-		.text(function(d){ return d})
+		.text(function(d){ return d}) // text is the series name
 		.attr("text-anchor", "left")
 		.style("alignment-baseline", "middle")
 		
 	
+	// Add title text
+	/*svg.selectAll(".titleText")
+	  .append("div")
+		.attr("class","legendText")
+		.attr("x", (d,i) => 5+lineLength+(i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2))
+		.attr("y", d => d.endsWith("Year 1") ? height-39 : height-24)
+		//.style("fill", d => stateColors[d.substring(0,2)])
+		.style("fill", d => color(d.substring(0,2)))
+		.style("font", "12px times")
+		.text(function(d){ return d}) // text is the series name
+		.attr("text-anchor", "left")
+		.style("alignment-baseline", "middle")*/
+		
+	// compute max dates	
+	console.log("hhs max date: " + d3.max(data, d => d.date));
+	console.log("nyt max date: " + d3.max(nytData, d => d.date));
 }
 
   
@@ -530,13 +699,13 @@ sumstat.map(d => {
 
 	// sort them by premium, descending
 	sortingObj.sort(function(x, y){
-	   return d3.descending(x.num, y.num);
+	   return d3.ascending(x.key, y.key);
 	})
 
 	// strip keys
 	var sortingArr = sortingObj.map(d=> d.key)
 
-	// rank vehicle category based on # of output variable
+	// sort by series title
 	var sumstat1 = sumstat.slice().sort((a, b) => (sortingArr.indexOf(a.key) - sortingArr.indexOf(b.key)))
 
 	//console.log("pageX=" + d3.event.pageX + " pageY=" + d3.event.pageY);
@@ -544,27 +713,46 @@ sumstat.map(d => {
 	// now the text
 	tooltip.html(sortingObj[0].date.toLocaleDateString('en-us', { year:"numeric", month:"short", day:"numeric"}))
   //.style('display', 'inline')
-  .style('left', (d3.event.pageX>400?d3.event.pageX-350:d3.event.pageX) + "px")
+  .style('left', (d3.event.pageX>400?d3.event.pageX-350:d3.event.pageX) + "px") // choose left or right of cursor depending on 
   .style('top', (d3.event.pageY - 220) + "px")
   .style('width', "300px")
-  .style('font-size', 11.5)
-  .style('font-weight', "bold")
+  .style('padding-bottom', "10px")
   .selectAll()
-  .data(sumstat1).enter() // for each vehicle category, list out name and price of premium
+  .data(sumstat1).enter() // for each series
   .append('div')
   .style('color', d => {
+	var color = d3.scaleOrdinal()
+	.domain(statesSelected)
+	.range(paletteStr.split(","));
 	var xDate = x.invert(mouse[0])
 	var bisect = d3.bisector(d => d.date).left
 	var idx = bisect(d.values, xDate)
 	return color(d.values[idx].state)
   })
-  .style('font-size', 10)
   .html(d => {
 	var xDate = x.invert(mouse[0])
 	var bisect = d3.bisector(d => d.date).left
 	var idx = bisect(d.values, xDate)
-	return d.key + ": " + d.values[idx][groupSelected];
+	var row = d.values[idx];
+	var pctChgMsg = "";
+	if (row.surge == "Year 2"){
+		/*console.log("row: " + row);
+		console.log("prior: " + row.prior);
+		console.log(row.series + " " + row.ip_covid_ma);
+		console.log(row.prior.series + " " + row.prior.ip_covid_ma);
+		console.log("pct: " + (row.ip_covid_ma/row.prior.ip_covid_ma).toFixed(2));*/
+		//let pctChg = 100*((groupSelected.startsWith("ip_covid") ? 
+		//	(row.ip_covid_ma/row.prior.ip_covid_ma) : (row.deaths_covid_ma/row.prior.deaths_covid_ma))-1);
+		
+		let pctChg = 100*(row[groupSelected]/row.prior[groupSelected]-1);
+		
+		pctChgMsg = " (" + Math.abs(pctChg.toFixed(0)) + "% " + (pctChg>0 ? "Increase)" : "Decrease)");
+	} 
+	// show series, # of output variable with correct # decimal places
+	return d.key + ": " + row[groupSelected].toFixed(decimals[groupSelected]) + pctChgMsg;
   })
+  .style("font-size","16px")
+  .style("font-weight","normal")
 }
 
 </script>
