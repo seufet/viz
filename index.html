@@ -179,6 +179,9 @@ var chartHeight = 350 - 75;
 
 var titleDiv;
 
+// color function
+var colorByState;
+
 // append the svg object to the body of the page
 var svg = d3.select("div#container")
   .append("svg")
@@ -453,7 +456,7 @@ function update() {
 	statesSelected.sort();
 
 	// state palette
-	var color = d3.scaleOrdinal()
+	colorByState = d3.scaleOrdinal()
 	.domain(statesSelected)
 	.range(paletteStr.split(","));
 	
@@ -570,10 +573,7 @@ function update() {
   mousePerLine.append("circle")
 	.attr("r", 4)
 	.style("stroke", d => {
-		var color = d3.scaleOrdinal()
-		.domain(statesSelected)
-		.range(paletteStr.split(","));
-		return color(d.key.substring(0,2));
+		return colorByState(d.key.substring(0,2));
 	})
 	.style("fill", "none")
 	.style("stroke-width", "2px")
@@ -654,7 +654,7 @@ function update() {
 				(d.values)
 		})
 	  .attr("fill", "none")
-	  .attr("stroke", d => color(d.key.substring(0,2)))
+	  .attr("stroke", d => colorByState(d.key.substring(0,2)))
 	  .style("stroke-width", 2)
 	  // Year 2 not dashed, Year 1 dashed
 		.style("stroke-dasharray", (d) => d.key.endsWith("Year 2") ? "3,0" : "3,3" )
@@ -676,7 +676,7 @@ function update() {
 		.attr("y1", d => d.endsWith("Year 1") ? height-40 : height-25)
 		.attr("y2", d => d.endsWith("Year 1") ? height-40 : height-25)
 		//.style("stroke", d => stateColors[d.substring(0,2)])
-		.attr("stroke", d => color(d.substring(0,2)))
+		.attr("stroke", d => colorByState(d.substring(0,2)))
 		.style("stroke-width", 2)
 		.style("stroke-dasharray", (d) => d.endsWith("Year 2") ? "3,0" : "3,3" )
 
@@ -691,7 +691,7 @@ function update() {
 		.attr("class","legendText")
 		.attr("x", (d,i) => 5+lineLength+(i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2))
 		.attr("y", d => d.endsWith("Year 1") ? height-39 : height-24)
-		.style("fill", d => color(d.substring(0,2)))
+		.style("fill", d => colorByState(d.substring(0,2)))
 		.style("font", "12px times")
 		.text(d => d) // text is the series name
 		.attr("text-anchor", "left")
@@ -706,11 +706,13 @@ function update() {
 // This is called by the chart's mouse movement listener  
 // to write the text that shows in the tooltip box
 function updateTooltipContent(mouse) {
-
+	// date for mouse x pos
+	var xDate = x.invert(mouse[0])
+	  
+	// XXX this sorting can likely be simplified...we just want to sort by state abbreviation...
 	// populate sortingObj with EACH match in the various groups
 	sortingObj = []
 	sumstat.map(d => {
-	  var xDate = x.invert(mouse[0])
 	  var idx = d3.bisector(d => d.date).left(d.values, xDate);
 	  sortingObj.push(
 		{	
@@ -720,7 +722,7 @@ function updateTooltipContent(mouse) {
 		})
 	}) // close map()
 
-	// sort them by premium, descending
+	// sort them by key, descending
 	sortingObj.sort(function(x, y){
 	   return d3.ascending(x.key, y.key);
 	})
@@ -733,52 +735,36 @@ function updateTooltipContent(mouse) {
 
 	//console.log("pageX=" + d3.event.pageX + " pageY=" + d3.event.pageY);
 
-	// now the text
+	/////////////////////////////////////////////////////////////////////
+	// tooltip box text
+	
+	// date at the top and box position
 	tooltip.html(sortingObj[0].date.toLocaleDateString('en-us', { year:"numeric", month:"short", day:"numeric"}))
-  //.style('display', 'inline')
-  .style('left', (d3.event.pageX>500?d3.event.pageX-380:d3.event.pageX) + "px") // choose left or right of cursor depending on 
-  .style('top', (d3.event.pageY - 280) + "px")
-  .style('width', "300px")
-  .style('padding-bottom', "10px")
-  .selectAll()
-  .data(sumstat1).enter() // for each series
-  .append('div')
-  .style('color', d => {
-	var color = d3.scaleOrdinal()
-	.domain(statesSelected)
-	.range(paletteStr.split(","));
-	var xDate = x.invert(mouse[0])
-	var idx = d3.bisector(d => d.date).left(d.values, xDate);
-	//console.log("tt states: " + statesSelected);
-	//console.log("stateVal=" + d.values[idx].state);
-	//console.log("stateVal=" + color(d.values[idx].state));
-	return color(d.values[idx].state)
-  })
-  .html(d => {
-	var xDate = x.invert(mouse[0])
-	var bisect = d3.bisector(d => d.date).left
-	var idx = bisect(d.values, xDate)
-	var row = d.values[idx];
-	if (row[groupSelected] == null) return "";	
-	var pctChgMsg = "";
-	if (row.surge == "Year 2" && row[groupSelected] != null && row.prior[groupSelected] != null){
-		/*console.log("row: " + row);
-		console.log("prior: " + row.prior);
-		console.log(row.series + " " + row.ip_covid_ma);
-		console.log(row.prior.series + " " + row.prior.ip_covid_ma);
-		console.log("pct: " + (row.ip_covid_ma/row.prior.ip_covid_ma).toFixed(2));*/
-		//let pctChg = 100*((groupSelected.startsWith("ip_covid") ? 
-		//	(row.ip_covid_ma/row.prior.ip_covid_ma) : (row.deaths_covid_ma/row.prior.deaths_covid_ma))-1);
-		
-		let pctChg = 100*(row[groupSelected]/row.prior[groupSelected]-1);
-		
-		pctChgMsg = " (" + Math.abs(pctChg.toFixed(0)) + "% " + (pctChg>0 ? "Increase)" : "Decrease)");
-	} 
-	// show series, # of output variable with correct # decimal places
-	return d.key + ": " + row[groupSelected].toFixed(decimals[groupSelected]) + pctChgMsg;
-  })
-  .style("font-size","16px")
-  .style("font-weight","normal")
+	  .style('left', (d3.event.pageX>500?d3.event.pageX-380:d3.event.pageX) + "px") // choose left or right of cursor depending on 
+	  .style('top', (d3.event.pageY - 280) + "px")
+	  .style('width', "300px")
+	  .style('padding-bottom', "10px")
+	  .selectAll()
+	  .data(sumstat1).enter() // now a separate line for each series
+	  .append('div')
+	  .style('color', d => {
+		var idx = d3.bisector(d => d.date).left(d.values, xDate);
+		return colorByState(d.values[idx].state)
+	  })
+	  .html(d => {
+		var idx = d3.bisector(d => d.date).left(d.values, xDate)
+		var row = d.values[idx];
+		if (row[groupSelected] == null) return "";	
+		var pctChgMsg = "";
+		if (row.surge == "Year 2" && row[groupSelected] != null && row.prior[groupSelected] != null){	
+			let pctChg = 100*(row[groupSelected]/row.prior[groupSelected]-1);
+			pctChgMsg = " (" + Math.abs(pctChg.toFixed(0)) + "% " + (pctChg>0 ? "Increase)" : "Decrease)");
+		} 
+		// show series, # of output variable with correct # decimal places
+		return d.key + ": " + row[groupSelected].toFixed(decimals[groupSelected]) + pctChgMsg;
+	  })
+	  .style("font-size","16px")
+	  .style("font-weight","normal")
 }
 
 </script>
