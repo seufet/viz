@@ -153,6 +153,8 @@ By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.or
 	-don't use a drop-down if possible; maybe check boxes for data to include
 	-find max dates for nyt, hhs series and note
 	
+	-vaccination: https://data.cdc.gov/api/views/unsk-b7fc/rows.csv?accessType=DOWNLOAD, Series_Complete_65Plus
+	
 	-Credits:
 	Tooltips: https://bl.ocks.org/dianaow/0da76b59a7dffe24abcfa55d5b9e163e
 	Case, death data: NY Times, https://github.com/nytimes/covid-19-data
@@ -237,7 +239,8 @@ var startMonths = {
 };
 
 // basic configuration
-var statesSelectedStr = "MA,NH,RI";
+var defaultStatesSelected = ["MA","NH","RI"];
+var statesSelected;
 var defaultStartDate = "2021/06/01";
 var endDate = new Date();
 var paletteStr = "black,blue,brown,gray,red";
@@ -334,7 +337,7 @@ function loadPage(error, nyt) {
 	  .attr("value", d => stateNameLookup[d]) // co2responding value returned by the button
 
 	// default values for states
-	statesSelected = statesSelectedStr.split(",");
+	statesSelected = defaultStatesSelected;
 	for (i=0; i<statesSelected.length; i++){
 		if (statesSelected[i] != null) {
 			selectElement("state"+(i+1),statesSelected[i]);
@@ -399,38 +402,48 @@ function loadPage(error, nyt) {
 			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
 			priorYear.push(priorRow);
 			d.prior = priorRow;
-			// 100 --> 125 = 25% inc
-			//d.ip_covid_pct_change = (parseFloat(d.ip_covid) / priorRow.ip_covid)-1;
-			//d.deaths_covid_pct_change = (parseFloat(d.deaths_covid) / priorRow.deaths_covid)-1;
 		}
 	});
-
 	console.log("data size: " + hhsData.length);
 	console.log("priorYear size: " + priorYear.length);
 	hhsData = hhsData.concat(priorYear);
-	//data = priorYear;
 	console.log("combined data size: " + hhsData.length);
 
-	// CREATE HOVER TOOLTIP WITH VERTICAL LINE //
-  // https://bl.ocks.org/dianaow/0da76b59a7dffe24abcfa55d5b9e163e
-  tooltip = d3.select("div#container").append("div")
-	.attr('id', 'tooltip')
-	//.style('position', 'absolute')
-	.style('padding', 6)
-	.style('display', 'none')
+	//////////////////////////////////////////////////////////////////
+	// Hidden tooltip
+	tooltip = d3.select("div#container").append("div")
+		.attr('id', 'tooltip')
+		.style('padding', 6)
+		.style('display', 'none')
 
+	//////////////////////////////////////////////////////////////////
+	// Assign the event handlers
 	
+	// When new data is selected, run the update() function
+    d3.select("#selectButton").on("change", function(d) {
+        // recover the option that has been chosen and update
+        groupSelected = d3.select(this).property("value")
+        update()
+    })
+	// update if new state chosen
+	d3.selectAll(".stateButton").on("change", function(d) {
+        update()
+    })
+	// update if new startDate chosen
+	d3.select("#startDateButton").on("change", function(d) {
+        update()
+    })
 
 	// start off with a selection
 	update();
 } // end of loadPage() 
 
-// A function that updates the chart
+// A function that updates the chart when the various controls change (date range, data set, etc)
 function update() {
-	console.log("update!");
+	console.log("update! groupSelected=" + groupSelected);
 	var data = hhsData;
 
-	let statesSelected = [];
+	statesSelected = [];
 	for (i=1; i<=5; i++){
 		let v = elementValue("state"+i);
 		if (v != null && v != "XX"){
@@ -445,8 +458,8 @@ function update() {
 	.range(paletteStr.split(","));
 	
 	// update title
-  d3.select("div#chart-title")
-	.html(titlePrefix + groups[groupSelected])
+	d3.select("div#chart-title")
+		.html(titlePrefix + groups[groupSelected])
 	
 	// filter by date, state, etc
 	// process the config
@@ -532,23 +545,6 @@ function update() {
   .attr("class","myYaxis")
   .call(yAxis);
 
-	// When new data is selected, run the update() function
-    d3.select("#selectButton").on("change", function(d) {
-        // recover the option that has been chosen
-        groupSelected = d3.select(this).property("value")
-        // run the updateChart function with this selected option
-        update()
-    })
-	// update if new state chosen
-	d3.selectAll(".stateButton").on("change", function(d) {
-        update()
-    })
-	// update if new startDate chosen
-	d3.select("#startDateButton").on("change", function(d) {
-        update()
-    })
-	
-
   ////////////////////////////////////////////////////////
   // tool-tip stuff
 
@@ -598,7 +594,7 @@ function update() {
 	  d3.selectAll("#tooltip")
 		.style('display', 'none')
 	})
-	.on('mouseover', function () { // on mouse in show line, circles and text
+	.on('mouseover', () => { // on mouse in show line, circles and text
 	  d3.select(".mouse-line")
 		.style("opacity", "1");
 	  d3.selectAll(".mouse-per-line circle")
@@ -606,32 +602,28 @@ function update() {
 	  d3.selectAll("#tooltip")
 		.style('display', 'block')
 	})
-	.on('mousemove', function () { // update tooltip content, line, circles and text when mouse moves
-	  var mouse = d3.mouse(this)  
-
+	.on('mousemove', function() { // update tooltip content, line, circles and text when mouse moves
+		var mouse = d3.mouse(this);  
+		var xDate = x.invert(mouse[0]); // get date corresponding to mouse x position
 		
+		// move the circles that highlight each point
 		d3.selectAll(".mouse-per-line")
-		.attr("transform", function (d, i) {
-		  var xDate = x.invert(mouse[0]) // use 'invert' to get date corresponding to distance from mouse position relative to svg
-		  var bisect = d3.bisector(function (d) { return d.date; }).left // retrieve row index of date on parsed csv
-		  var idx = bisect(d.values, xDate);
-
-		  // this specifies the vertical mouseline as a string...
-		  d3.select(".mouse-line")
-			.attr("d", function () {
-			  var data = "M" + x(d.values[idx].date) + "," + (chartHeight-40);
-			  data += " " + x(d.values[idx].date) + "," + 0;
-			  return data;
-			});
-			// position box based on x/y
+		.attr("transform", (d, i) => {
+		  // find index in the data corresponding to the date/mouse position and position the circle x/y
+		  var idx = d3.bisector(d => d.date).left(d.values, xDate);
 		  return "translate(" + x(d.values[idx].date) + "," + y(d.values[idx][groupSelected]) + ")";
-
 		}); // end attr statement
-		updateTooltipContent(mouse, sumstat);
+		
+		// move the vertical line
+		d3.select(".mouse-line")
+			.attr("d", () => ("M" + x(xDate) + "," + (chartHeight-40) + " " + x(xDate) + "," + 0));
+		
+		// update the text in the box
+		updateTooltipContent(mouse);
 	})
 	
 	// update y axis (x axis stays same for now) with 1s transition
-	y.domain([0, d3.max(data, function(d) { return +d[groupSelected]  }) ]);
+	y.domain([0, d3.max(data, d => +d[groupSelected]) ]);
 	svg.selectAll(".myYaxis")
 		.transition()
 		.duration(1000)
@@ -711,15 +703,15 @@ function update() {
 }
 
   
-// writes the text that shows in the tooltip box
+// This is called by the chart's mouse movement listener  
+// to write the text that shows in the tooltip box
 function updateTooltipContent(mouse) {
 
-// populate sortingObj with EACH match in the various groups
-sortingObj = []
-sumstat.map(d => {
+	// populate sortingObj with EACH match in the various groups
+	sortingObj = []
+	sumstat.map(d => {
 	  var xDate = x.invert(mouse[0])
-	  var bisect = d3.bisector(d => d.date).left
-	  var idx = bisect(d.values, xDate)
+	  var idx = d3.bisector(d => d.date).left(d.values, xDate);
 	  sortingObj.push(
 		{	
 			key: d.values[idx].series, 
@@ -744,8 +736,8 @@ sumstat.map(d => {
 	// now the text
 	tooltip.html(sortingObj[0].date.toLocaleDateString('en-us', { year:"numeric", month:"short", day:"numeric"}))
   //.style('display', 'inline')
-  .style('left', (d3.event.pageX>400?d3.event.pageX-350:d3.event.pageX) + "px") // choose left or right of cursor depending on 
-  .style('top', (d3.event.pageY - 220) + "px")
+  .style('left', (d3.event.pageX>500?d3.event.pageX-380:d3.event.pageX) + "px") // choose left or right of cursor depending on 
+  .style('top', (d3.event.pageY - 280) + "px")
   .style('width', "300px")
   .style('padding-bottom', "10px")
   .selectAll()
@@ -756,8 +748,10 @@ sumstat.map(d => {
 	.domain(statesSelected)
 	.range(paletteStr.split(","));
 	var xDate = x.invert(mouse[0])
-	var bisect = d3.bisector(d => d.date).left
-	var idx = bisect(d.values, xDate)
+	var idx = d3.bisector(d => d.date).left(d.values, xDate);
+	//console.log("tt states: " + statesSelected);
+	//console.log("stateVal=" + d.values[idx].state);
+	//console.log("stateVal=" + color(d.values[idx].state));
 	return color(d.values[idx].state)
   })
   .html(d => {
@@ -765,6 +759,7 @@ sumstat.map(d => {
 	var bisect = d3.bisector(d => d.date).left
 	var idx = bisect(d.values, xDate)
 	var row = d.values[idx];
+	if (row[groupSelected] == null) return "";	
 	var pctChgMsg = "";
 	if (row.surge == "Year 2" && row[groupSelected] != null && row.prior[groupSelected] != null){
 		/*console.log("row: " + row);
