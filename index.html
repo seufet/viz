@@ -72,9 +72,9 @@
 	height: 30px;
 	padding-left: 10px;
 }
-.startDateButton {
+#startDateButton {
 	height: 30px;
-	padding-left: 10px;
+	margin-left: 10px;
 }
 #stateSpan {
 	padding-top: 10px;
@@ -86,7 +86,7 @@
 }
 #main {
   width: 90%;
-  height: 60px;
+  height: 75px;
   border: 2px solid #000000;
   margin-left: 40px;
   padding-left: 10px;
@@ -121,8 +121,9 @@
 
 <body>
 <div id="main">
-<span id="ttl">Covid-19 Surge Comparison by US State</span>
-<span class="lnk"><a href="explanation.html">What is this?</a></span>
+<span id="ttl">Covid-19 Surge Comparison by US State</span><br>
+<span class="lnk">Sources: NY Times, HealthData.gov<br>
+By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.org/">rarelyread.org</a></span>
 </div>
 
 <!-- Initialize a select button -->
@@ -322,7 +323,7 @@ function loadPage(error, nyt) {
 	  .text(d => d) // text showed in the menu
 	  .attr("value", d => startMonths[d]) // co2responding value returned by the button
 
-//data.sort((a, b) => (a.date > b.date) ? 1 : -1);
+	// this just makes sure that "None" always sorts to the top
 	stateSort = Object.keys(stateNameLookup).sort((a,b) => (a == "None" ? -1 : b == "None" ? 1 : a>b ? 1 : -1));
 	d3.selectAll(".stateButton")
 	  .selectAll('myOptions')
@@ -531,7 +532,7 @@ function update() {
   .attr("class","myYaxis")
   .call(yAxis);
 
-	// When the button is changed, run the updateChart function
+	// When new data is selected, run the update() function
     d3.select("#selectButton").on("change", function(d) {
         // recover the option that has been chosen
         groupSelected = d3.select(this).property("value")
@@ -542,11 +543,17 @@ function update() {
 	d3.selectAll(".stateButton").on("change", function(d) {
         update()
     })
-	// update if new state chosen
+	// update if new startDate chosen
 	d3.select("#startDateButton").on("change", function(d) {
         update()
     })
 	
+
+  ////////////////////////////////////////////////////////
+  // tool-tip stuff
+
+	// rebuild all tool-tip stuff from scratch on each call to update()
+	svg.selectAll(".mouse-over-effects").remove();
 
   mouseG = svg.append("g")
 	.attr("class", "mouse-over-effects");
@@ -557,6 +564,7 @@ function update() {
 	.style("stroke-width", "2px")
 	.style("opacity", "0");
 
+  // for the little circles on the vertical line
   var mousePerLine = mouseG.selectAll('.mouse-per-line')
 	.data(sumstat)
 	.enter()
@@ -601,7 +609,8 @@ function update() {
 	.on('mousemove', function () { // update tooltip content, line, circles and text when mouse moves
 	  var mouse = d3.mouse(this)  
 
-	  d3.selectAll(".mouse-per-line")
+		
+		d3.selectAll(".mouse-per-line")
 		.attr("transform", function (d, i) {
 		  var xDate = x.invert(mouse[0]) // use 'invert' to get date corresponding to distance from mouse position relative to svg
 		  var bisect = d3.bisector(function (d) { return d.date; }).left // retrieve row index of date on parsed csv
@@ -628,13 +637,14 @@ function update() {
 		.duration(1000)
 		.call(yAxis);
 
-	// Create a update selection: bind to the new data
+	// if we have a different # of lines to draw, remove the old ones
+	// otherwise we have extra lines hanging around if one or more are supposed to be removed
 	if (uniqueSeries.length != lastSeriesLength){
 		svg.selectAll(".lineTest").remove();
 	}
+	
 	lastSeriesLength = uniqueSeries.length;
 	var u = svg.selectAll(".lineTest").data(sumstat);
-	//	u.remove();
 	
 	  // Draw the lines
 	  u.enter()
@@ -652,14 +662,14 @@ function update() {
 				(d.values)
 		})
 	  .attr("fill", "none")
-	  //.attr("stroke", d => stateColors[d.key.substring(0,2)])
 	  .attr("stroke", d => color(d.key.substring(0,2)))
 	  .style("stroke-width", 2)
 	  // Year 2 not dashed, Year 1 dashed
 		.style("stroke-dasharray", (d) => d.key.endsWith("Year 2") ? "3,0" : "3,3" )
 	
-	console.log("UNIQUE SERIES: " + uniqueSeries);
+	
 	// Add a short line in the legend for each entry.
+	console.log("UNIQUE SERIES: " + uniqueSeries);
 	var lineLength = 20;
 	var totalLength = 120;
 	svg.selectAll(".legendLines").remove();
@@ -689,26 +699,11 @@ function update() {
 		.attr("class","legendText")
 		.attr("x", (d,i) => 5+lineLength+(i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2))
 		.attr("y", d => d.endsWith("Year 1") ? height-39 : height-24)
-		//.style("fill", d => stateColors[d.substring(0,2)])
 		.style("fill", d => color(d.substring(0,2)))
 		.style("font", "12px times")
-		.text(function(d){ return d}) // text is the series name
+		.text(d => d) // text is the series name
 		.attr("text-anchor", "left")
 		.style("alignment-baseline", "middle")
-		
-	
-	// Add title text
-	/*svg.selectAll(".titleText")
-	  .append("div")
-		.attr("class","legendText")
-		.attr("x", (d,i) => 5+lineLength+(i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2))
-		.attr("y", d => d.endsWith("Year 1") ? height-39 : height-24)
-		//.style("fill", d => stateColors[d.substring(0,2)])
-		.style("fill", d => color(d.substring(0,2)))
-		.style("font", "12px times")
-		.text(function(d){ return d}) // text is the series name
-		.attr("text-anchor", "left")
-		.style("alignment-baseline", "middle")*/
 		
 	// compute max dates	
 	console.log("hhs max date: " + d3.max(data, d => d.date));
@@ -716,6 +711,7 @@ function update() {
 }
 
   
+// writes the text that shows in the tooltip box
 function updateTooltipContent(mouse) {
 
 // populate sortingObj with EACH match in the various groups
@@ -770,7 +766,7 @@ sumstat.map(d => {
 	var idx = bisect(d.values, xDate)
 	var row = d.values[idx];
 	var pctChgMsg = "";
-	if (row.surge == "Year 2"){
+	if (row.surge == "Year 2" && row[groupSelected] != null && row.prior[groupSelected] != null){
 		/*console.log("row: " + row);
 		console.log("prior: " + row.prior);
 		console.log(row.series + " " + row.ip_covid_ma);
