@@ -242,7 +242,7 @@ var startMonths = {
 };
 
 // basic configuration
-var defaultStatesSelected = ["MA","NH","RI"];
+var defaultStatesSelected = ["MA","NH","XX","XX","XX"];
 var statesSelected;
 var defaultStartDate = "2021/06/01";
 var endDate = new Date();
@@ -446,19 +446,22 @@ function update() {
 	console.log("update! groupSelected=" + groupSelected);
 	var data = hhsData;
 
+	// process state selections
 	statesSelected = [];
 	for (i=1; i<=5; i++){
 		let v = elementValue("state"+i);
-		if (v != null && v != "XX"){
+		//if (v != null && v != "XX"){
 			statesSelected.push(v);
-		}
+		//} 
 	}
-	statesSelected.sort();
 
 	// state palette
 	colorByState = d3.scaleOrdinal()
 	.domain(statesSelected)
 	.range(paletteStr.split(","));
+	
+	// sort after assigning palette
+	statesSelected.sort();
 	
 	// update title
 	d3.select("div#chart-title")
