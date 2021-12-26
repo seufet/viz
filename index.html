@@ -5,19 +5,6 @@
 </head>
 
 <style>
-.loader {
-  border: 16px solid #f3f3f3; /* Light grey */
-  border-top: 16px solid #3498db; /* Blue */
-  border-radius: 50%;
-  width: 120px;
-  height: 120px;
-  animation: spin 2s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
 .svg-container {
     display: block;
     position: relative;
@@ -113,6 +100,31 @@
   font-size: 20px;
   text-align: center;
 }
+#loadingContent {
+	width: 30%;
+	margin: auto;
+}
+#loadingMsg {
+	font-size: 20px;
+	font-weight: bold;
+	display: block;
+	margin: auto;
+}
+.loader {
+  border: 8px solid #f3f3f3; /* Light grey */
+  border-top: 8px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  margin: auto;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 
 </style>
 
@@ -126,6 +138,12 @@
 By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.org/">rarelyread.org</a></span>
 </div>
 
+<div id="loadingContent">
+<span id="loadingMsg">Initializing...</span>
+<div class="loader"></div>
+</div>
+
+<div id="d3Content">
 <!-- Initialize a select button -->
 <div id="controls">
  <span id="selectSpan"><b>Data: </b><select id="selectButton"></select><b>Start Date:</b><select id="startDateButton"></select></span><br>
@@ -142,7 +160,7 @@ By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.or
 <!-- Create a div where the graph will take place -->
 <div id="chart-title"></div>
 <div id="container" class="svg-container"></div>
-
+</div>
 
 </body>
 
@@ -150,8 +168,11 @@ By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.or
 
 /* <div class="loader"></div>
 	ToDo: 
-	-don't use a drop-down if possible; maybe check boxes for data to include
+	-don't use a drop-down if possible; maybe check boxes for data to include, e.g. cases, hosp, deaths, vaccinations
+	-check box to show: raw values, per 100k, year-to-year pct change
+	-be able to show prior year data ahead of current date: start date, time period
 	-find max dates for nyt, hhs series and note
+	-loading icon
 	
 	-vaccination: https://data.cdc.gov/api/views/unsk-b7fc/rows.csv?accessType=DOWNLOAD, Series_Complete_65Plus
 	
@@ -161,6 +182,10 @@ By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.or
 	Hospitalization, death data: HealthData.gov, https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD
 	
 */
+
+// start with dynamic content hidden
+d3.select("#d3Content")
+		.style("display","none");
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -254,6 +279,7 @@ var paletteStr = "black,blue,brown,gray,red";
 // Credit: HealthData.gov: 
 // Download: https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD
 //d3.csv("hhs_data_full.csv", hhsLoaded);
+d3.select("#loadingMsg").html("Loading Hospitalization Data...");
 d3.csv("https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD", hhsLoaded);
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -269,7 +295,8 @@ d3.csv("https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD"
 function hhsLoaded(error, data) {
 	console.log("hhsLoaded: " + data.length);
 	hhsData =  data;
-	
+		
+	d3.select("#loadingMsg").html("Loading Cases/Death Data...");
 	d3.csv("https://seufet.github.io/viz/state_pop.csv", statePopLoaded);
 }
 
@@ -280,6 +307,7 @@ function statePopLoaded(error, data) {
 	// Credit: NY Times, https://github.com/nytimes/covid-19-data
 	// Download: https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv	
 	//d3.csv("nyt_data.csv", loadPage);
+	d3.select("#loadingMsg").html("Loading State Demographic Data...");
 	d3.csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv", loadPage);
 }
 
@@ -296,6 +324,9 @@ function elementValue(id) {
 
 // Finish getting the page ready after our data sets are loaded
 function loadPage(error, nyt) {
+	// Update loader
+	d3.select("#loadingMsg").html("Processing Data...");
+
 	// pre-process the data sets
 	nytData = nyt;
 	console.log("nytData: " + nytData.length);
@@ -439,6 +470,10 @@ function loadPage(error, nyt) {
 
 	// start off with a selection
 	update();
+	
+	// We're finished loading! Hide loader, show content
+	d3.select("#loadingContent").style("display","none");
+	d3.select("#d3Content").style("display","block");
 } // end of loadPage() 
 
 // A function that updates the chart when the various controls change (date range, data set, etc)
