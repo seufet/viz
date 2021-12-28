@@ -147,6 +147,8 @@ function startup(){
 		  
 	d3.select("#loadingMsg").html("Loading Hospitalization Data...");
 	d3.csv("https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD", hhsLoaded);
+	
+	makeAllSortable();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -378,6 +380,9 @@ function loadPage(error, vd) {
 	.attr("class","myXAxis")
     .attr("transform", "translate(0," + (height-75) + ")")
     .call(xAxis);
+
+	// create the table
+	createTable();
 
 	// start off with a selection
 	update();
@@ -1112,4 +1117,103 @@ function updateTooltipContentPct(mouse) {
 	  })
 	  .style("font-size","16px")
 	  .style("font-weight","normal")
+}
+
+
+////////////////////////////////////////////////////////////////////////
+// Table sorting
+function sortTable(table, col, reverse) {
+    var tb = table.tBodies[0], // use `<tbody>` to ignore `<thead>` and `<tfoot>` rows
+        tr = Array.prototype.slice.call(tb.rows, 0), // put rows into array
+        i;
+    reverse = -((+reverse) || -1);
+    tr = tr.sort(function (a, b) { // sort rows
+		as = a.cells[col].textContent.trim().replace("%","");
+		bs = b.cells[col].textContent.trim().replace("%","");
+		
+		if (!isNaN(as) && !isNaN(bs)){
+			av = parseFloat(as);
+			bv = parseFloat(bs);
+			return reverse * (av>bv?1:av==bv?0:-1)
+		} else {
+			return reverse * as.localeCompare(bs);
+		}
+		/*return reverse // `-1 *` if want opposite order
+            * (parseFloat(a.cells[col].textContent.trim()) // using `.textContent.trim()` for test
+                .localeCompare(parseFloat(b.cells[col].textContent.trim()))
+               );*/
+    });
+    for(i = 0; i < tr.length; ++i) tb.appendChild(tr[i]); // append each row in order
+}
+
+function makeSortable(table) {
+    var th = table.tHead, i;
+    th && (th = th.rows[0]) && (th = th.cells);
+    if (th) i = th.length;
+    else return; // if no `<thead>` then do nothing
+    while (--i >= 0) (function (i) {
+        var dir = 1;
+        th[i].addEventListener('click', function () {sortTable(table, i, (dir = 1 - dir))});
+    }(i));
+}
+
+function makeAllSortable(parent) {
+    parent = parent || document.body;
+    var t = parent.getElementsByTagName('table'), i = t.length;
+    while (--i >= 0) makeSortable(t[i]);
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////
+// Table manipulation
+
+tblData = [
+	["CT",5,"-5%",5,"-5%",5,"5%"],
+	["NY",6,"7%",8,"-9%",10,"11%"]
+];
+
+function createTable(){
+	var table = document.getElementById('data-table'),
+		tbody = table.getElementsByTagName('tbody')[0],
+		clone = tbody.rows[0].cloneNode(true);
+
+	let row = tbody.rows[0];
+	for (i=0; i<tblData.length; i++){
+		rowData = tblData[i];
+		
+		// replace values of 1st row, but don't clone it
+		if (i > 0) row = clone.cloneNode(true);
+		for (j=0; j<rowData.length; j++){
+			cell = row.cells[j];
+			cell.innerHTML = rowData[j];
+			if (j == 0) cell.className="stateCol";
+			else cell.className="otherCol";
+		}
+		tbody.appendChild(row);
+	}
+}
+
+function deleteRow(el) {
+    var i = el.parentNode.parentNode.rowIndex;
+    table.deleteRow(i);
+    while (table.rows[i]) {
+        updateRow(table.rows[i], i, false);
+        i++;
+    }
+}
+
+function insRow() {
+		var table = document.getElementById('data-table'),
+		tbody = table.getElementsByTagName('tbody')[0],
+		clone = tbody.rows[0].cloneNode(true);
+
+
+    var new_row = updateRow(clone.cloneNode(true), ++tbody.rows.length, true);
+    tbody.appendChild(new_row);
+}
+
+function updateRow(row, i, reset) {
+    row.cells[0].innerHTML = i;
+
+    return row;
 }

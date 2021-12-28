@@ -145,7 +145,41 @@
 	  0% { transform: rotate(0deg); }
 	  100% { transform: rotate(360deg); }
 	}
+	
+	
+tbody tr:nth-child(odd) {
+  background-color: lightgray;
+}
 
+tbody tr:nth-child(even) {
+  background-color: white;
+}
+
+thead th, tfoot th, tfoot td {
+  border: 0px solid black;
+  width: 10%;
+}
+tbody tr {
+  
+}
+
+.stateCol {
+	text-align: left;
+}
+.otherCol {
+	text-align: center;
+}
+
+table {
+  background-color: white;
+  border: 2px solid black;  
+}
+
+#data-table-div {
+	margin-left: 50px;
+	margin-top: 50px;
+	display: none;
+}
 
 	</style>
 
@@ -193,6 +227,34 @@ By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.or
 <div id="foot">
 <span id="footSpan"><br>Sources: NY Times (cases/deaths), HealthData.gov (hosp), CDC (vaccinations)</span>
 </div>
+
+<div id="data-table-div" display="none">
+	<table id="data-table">
+		<thead>
+			<tr>
+			  <th>State</th>
+			  <th>Cases</th>
+			  <th>1 Yr Change</th>
+			  <th>Hospitalized</th>
+			  <th>1 Yr Change</th>
+			  <th>Deaths</th>
+			  <th>1 Yr Change</th>
+			</tr>
+		  </thead>
+		  <tbody id="data-table-body">
+			<tr>
+			  <td>MA</td>
+			  <td>500</td>
+			  <td>20%</td>
+			  <td>100</td>
+			  <td>-20%</td>
+			  <td>10</td>
+			  <td>-50%</td>
+			</tr>
+		  </tbody>
+	</table>
+</div>
+
 </div>
 
 
