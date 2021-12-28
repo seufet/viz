@@ -639,7 +639,7 @@ function updateStandard(data){
 	  .style("stroke-width", 2)
 	  // Year 2 not dashed, Year 1 dashed
 		.style("stroke-dasharray", (d) => d.key.endsWith("Year 2") ? "3,0" : "3,3" )
-	
+	u.exit().remove();
 	
 	// Add a short line in the legend for each entry.
 	console.log("UNIQUE SERIES: " + uniqueSeries);
