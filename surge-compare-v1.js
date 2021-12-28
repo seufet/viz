@@ -472,24 +472,28 @@ function update() {
 			//data[i].deaths_covid_rollsum = data[i-1].deaths_covid_rollsum + data[i].deaths_covid;
 		}
 		
+		// clean data - track last good death # for each state
+		lastGoodDeathCt = {};
+		
 		// now that the moving averages are calculate, do the pct change
 		seriesData.forEach(d => {
 			if (d.prior == null) return;
 			if (d.prior.cases_ma != 0){
-				//d.change_cases_ma = 100*(d.cases_ma/d.prior.cases_ma-1);
 				d.change_cases_ma = (d.cases_ma/d.prior.cases_ma);
-				//if (d.state == "MA") console.log(d.date + "-" + d.cases_ma + "-" + d.prior.cases_ma + "-" + d.change_cases_ma);
-			}
+			} 
+			else d.change_cases_ma = 1;
+		
 			if (d.prior.ip_covid_ma != 0){
-				//d.change_ip_covid_ma = 100*(d.ip_covid_ma/d.prior.ip_covid_ma-1);
 				d.change_ip_covid_ma = (d.ip_covid_ma/d.prior.ip_covid_ma);
-				//if (d.state == "MA") console.log(d.date + "-" + d.ip_covid_ma + "-" + d.prior.ip_covid_ma + "-" + d.change_ip_covid_ma);
-			}
+			} 
+			else d.change_ip_covid_ma = 1;
+			
 			if (d.prior.deaths_ma != 0){
-				//d.change_deaths_ma = 100*(d.deaths_ma/d.prior.deaths_ma-1);
 				d.change_deaths_ma = (d.deaths_ma/d.prior.deaths_ma);
-				//if (d.state == "MA") console.log(d.date + "-" + d.deaths_ma + "-" + d.prior.deaths_ma + "-" + d.change_deaths_ma);
-			}
+				lastGoodDeathCt[d.state] = d.change_deaths_ma;
+			} 
+			else if (lastGoodDeathCt[d.state] != null) d.change_deaths_ma = lastGoodDeathCt[d.state];
+			else d.change_deaths_ma = 1;	
 		});	
 	});
 
@@ -791,7 +795,13 @@ function updatePct(data){
 		d.pct_value = parseFloat(d.change_cases_ma);
 	});
 	data = data.concat(toAdd);
-	console.log("rows after series creation: " + data.length);
+	//console.log("rows after series creation: " + data.length);
+
+	/*nh = data.filter(d => d.pct_series == "NH,2");
+	console.log("NH values: " + nh.length);
+	nh.forEach(d => {
+			console.log("NH " + d.date.getMonth() + "-" + d.date.getDate() + " " + d.pct_series + "=" + d.pct_value.toFixed(2));
+	});*/
 
 	// update y axis to show logarithmic as decreases are in range 0-1 and increase e.g. 1-20.
 	// the domain needs to include the max/min value of all 3 metrics for each state/date
