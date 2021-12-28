@@ -15,7 +15,7 @@
 		padding-bottom: 40%;
 	}
 	#tooltip {
-		position:relative;
+		position:absolute;
 		border: 2px solid dimgray;
 		background-color: lightgray;
 		padding-bottom: 5px;
@@ -45,10 +45,18 @@
 		float: left;
 		width: 90%;
 		font-size: 18px;
-		font-size: 16px;
 		padding-bottom: 5px;
 		padding-top: 5px;
 		padding-left: 10px;
+	}
+	#footSpan {
+		float: left;
+		width: 90%;
+		font-size: 18px;
+		margin-top: 0px;
+		margin-left: 30px;
+		padding-bottom: 5px;
+		padding-left: 60px;
 	}
 	#selectButton {
 		height: 30px;
@@ -59,6 +67,10 @@
 		padding-left: 10px;
 	}
 	#startDateButton {
+		height: 30px;
+		margin-left: 10px;
+	}
+	#monthsButton {
 		height: 30px;
 		margin-left: 10px;
 	}
@@ -99,6 +111,16 @@
 	  font-size: 20px;
 	  text-align: center;
 	}
+	#foot {
+	  width: 90%;
+	  height: 20px;
+	  margin-left: 40px;
+	  margin-top: -20px;
+	  padding-left: 30px;
+	  font-size: 16px;
+	  text-align: left;
+	  display: block;
+	}
 	#loadingContent {
 		width: 30%;
 		margin: auto;
@@ -137,8 +159,7 @@
 <div id="main">
 <span id="ttl">US Covid-19 Surge Comparison</span><br>
 <span class="lnk">
-By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.org/">rarelyread.org</a><br>
-Sources: NY Times (cases/deaths), HealthData.gov (hosp), CDC (vaccinations)
+By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.org/">rarelyread.org</a>
 </span>
 </div>
 
@@ -148,9 +169,15 @@ Sources: NY Times (cases/deaths), HealthData.gov (hosp), CDC (vaccinations)
 </div>
 
 <div id="d3Content">
+
+
 <!-- Initialize a select button -->
 <div id="controls">
- <span id="selectSpan"><b>Data: </b><select id="selectButton"></select><b>Start Date:</b><select id="startDateButton"></select></span><br>
+ <span id="selectSpan">
+	<b>Data: </b><select id="selectButton"></select>
+	<b>Start Date:</b><select id="startDateButton"></select>
+	<b>Months:</b><select id="monthsButton"></select>
+	</span><br>
  <span id="stateSpan"><b>States: </b>
 	<select id="state1" class="stateButton"></select>
 	<select id="state2" class="stateButton"></select>
@@ -160,11 +187,15 @@ Sources: NY Times (cases/deaths), HealthData.gov (hosp), CDC (vaccinations)
 </span>
 </div>
 
-
 <!-- Create a div where the graph will take place -->
 <div id="chart-title"></div>
 <div id="container" class="svg-container"></div>
+<div id="foot">
+<span id="footSpan"><br>Sources: NY Times (cases/deaths), HealthData.gov (hosp), CDC (vaccinations)</span>
 </div>
+</div>
+
+
 
 
 </body>

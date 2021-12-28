@@ -50,7 +50,7 @@ var lastSeriesLength = 0;
 // set the dimensions and margins of the graph
 var margin = {top: 10, right: 30, bottom: 30, left: 60},
     width = 800 - margin.left - margin.right,
-    height = 350 - margin.top - margin.bottom;
+    height = 375 - margin.top - margin.bottom;
 
 var chartHeight = 350 - 75;
 
@@ -64,6 +64,7 @@ var hhsData;
 var nytData;
 var statePop;
 var vaccineData;
+var hhsLookup = {};
 
 var y, yAxis;
 var x, xAxis;
@@ -113,10 +114,14 @@ var startMonths = {
 // basic configuration
 var defaultStatesSelected = ["MA","XX","XX","XX","XX"];
 var statesSelected;
-var defaultStartDate = "2021/06/01";
+var defaultStartDate = "2021/07/01";
+var defaultNumMonths = 8;
 var defaultData = "pctChange";
 var endDate = new Date();
 var paletteStr = "black,blue,brown,gray,red";
+
+var startDate;
+var numMonthsSel;
 
 // our main d3 container
 var svg;
@@ -232,6 +237,17 @@ function loadPage(error, vd) {
 	  .text(d => d) // text showed in the menu
 	  .attr("value", d => startMonths[d]) // co2responding value returned by the button
 
+	// add the options to the StartDate button
+	let numMonths = [1,2,3,4,5,6,7,8,9,10,11,12];
+	d3.select("#monthsButton")
+	  .selectAll('monthOptions')
+		.data(numMonths)
+	  .enter()
+		.append('option')
+	  .text(d => d) // text showed in the menu
+	  .attr("value", d => d) // co2responding value returned by the button
+	selectElement("monthsButton",defaultNumMonths);
+
 	// this just makes sure that "None" always sorts to the top
 	stateSort = Object.keys(stateNameLookup).sort((a,b) => (a == "None" ? -1 : b == "None" ? 1 : a>b ? 1 : -1));
 	d3.selectAll(".stateButton")
@@ -270,7 +286,6 @@ function loadPage(error, vd) {
 	});
 	
 	// build a record lookup by date
-	let hhsLookup = {};
 	let vaccineGood = 0, vaccineBad = 0;
 	let lastVaxByState = {};
 	hhsData.sort((a, b) => (a.date > b.date) ? 1 : -1);
@@ -313,33 +328,6 @@ function loadPage(error, vd) {
 		hhsLookup[d.pk] = d;
 	});
 	console.log("vaccine good: " + vaccineGood + " - vaccineBad: " + vaccineBad);
-	
-	// prior year records
-	let priorYear = [];
-	
-	// add records for the needed columns
-	hhsData.forEach(function(d) {
-		// make a copy of the data for a year earlier than d, and add it to the priorYear array with a modified state name
-		// this enables us to have lines for the same state/date, but with the prior year records having a false date
-		let priorDate = new Date(d.date.getFullYear()-1,d.date.getMonth(),d.date.getDate());
-		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+priorDate.getTime()]);
-		
-		// if prior row exists, add it to the priorYear array
-		if (priorRow != null) {
-			priorRow.surge = "Year 1";
-			priorRow.series = d.state + ", " + priorRow.surge;
-			priorRow.date = d.date;
-			priorRow.dateStr = d.dateStr;
-			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
-			priorYear.push(priorRow);
-			
-			d.prior = priorRow;
-		}
-	});
-	console.log("data size: " + hhsData.length);
-	console.log("priorYear size: " + priorYear.length);
-	hhsData = hhsData.concat(priorYear);
-	console.log("combined data size: " + hhsData.length);
 
 	//////////////////////////////////////////////////////////////////
 	// Hidden tooltip
@@ -355,15 +343,20 @@ function loadPage(error, vd) {
     d3.select("#selectButton").on("change", function(d) {
         // recover the option that has been chosen and update
         groupSelected = d3.select(this).property("value")
-        update()
+        update();
     })
 	// update if new state chosen
 	d3.selectAll(".stateButton").on("change", function(d) {
-        update()
+        update();
     })
 	// update if new startDate chosen
 	d3.select("#startDateButton").on("change", function(d) {
-        update()
+        update();
+    })
+	
+	// update if new number of months chosen
+	d3.select("#monthsButton").on("change", function(d) {
+        update();
     })
 	
 	// Add Y axis
@@ -397,17 +390,84 @@ function loadPage(error, vd) {
 // A function that updates the chart when the various controls change (date range, data set, etc)
 function update() {
 	console.log("update! groupSelected=" + groupSelected);
-	var data = hhsData;
 
+	//////////////////////////////////////////////////////////////////
+	// read input
+	
 	// process state selections
 	statesSelected = [];
 	for (i=1; i<=5; i++){
 		let v = elementValue("state"+i);
-		//if (v != null && v != "XX"){
-			statesSelected.push(v);
-		//} 
+		statesSelected.push(v);
 	}
 
+	// start date and # months
+	numMonthsSel = parseInt(elementValue("monthsButton"));
+	startDate = parseDate(elementValue("startDateButton"));
+	console.log("Start Date:" + startDate + " Months:" + numMonthsSel);
+	
+	// start with only selected states to ease processing/memory
+	var data = hhsData.filter(d => statesSelected.includes(d.state));
+
+	
+	// prior year records
+	let priorYear = [];
+	
+	// add records for the needed columns
+	data.forEach(function(d) {
+		// make a copy of the data for a year earlier than d, and add it to the priorYear array with a modified state name
+		// this enables us to have lines for the same state/date, but with the prior year records having a false date
+		let priorDate = new Date(d.date.getFullYear()-1,d.date.getMonth(),d.date.getDate());
+		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+priorDate.getTime()]);
+		
+		// if prior row exists, add it to the priorYear array
+		if (priorRow != null) {
+			priorRow.surge = "Year 1";
+			priorRow.series = d.state + ", " + priorRow.surge;
+			priorRow.date = d.date;
+			priorRow.dateStr = d.dateStr;
+			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
+			priorYear.push(priorRow);
+			
+			d.prior = priorRow;
+		}
+	});
+	
+	// add some for between 10-12 months ago, so we can see last year's values ahead of today a bit
+	let oneDay = 1000 * 3600 * 24;
+	let today = new Date();
+	let startDateAgo = Math.floor((today.getTime()-startDate.getTime())/oneDay);
+	let daysAdd = numMonthsSel*30-startDateAgo;
+	
+	console.log("Start date days ago: " + startDateAgo + " - numMonths=" + numMonthsSel);
+	let oneYearAgo = new Date(today.getFullYear()-1,today.getMonth(),today.getDate());
+	let peekData = data.filter(d => {
+		daysDiff = Math.floor((d.date.getTime()-oneYearAgo.getTime())/oneDay);
+		return (daysDiff >= 0 && daysDiff < daysAdd);
+	});
+	console.log("PEEK DATA FILTER:" + peekData.length);
+	peekData.forEach(d => {
+		let newDate = new Date(d.date.getFullYear()+1,d.date.getMonth(),d.date.getDate());
+		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+d.date.getTime()]);
+		
+		// if prior row exists, add it to the priorYear array
+		if (priorRow != null) {
+			priorRow.surge = "Year 1";
+			priorRow.series = d.state + ", " + priorRow.surge;
+			priorRow.date = newDate;
+			priorRow.dateStr = d.dateStr;
+			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
+			priorYear.push(priorRow);
+			
+			d.prior = priorRow;
+		}
+	});
+	
+	console.log("orig hhsData size: " + hhsData.length);
+	console.log("priorYear size: " + priorYear.length);
+	data = hhsData.concat(priorYear);
+	console.log("combined data size: " + data.length);
+	
 	// state palette
 	colorByState = d3.scaleOrdinal()
 	.domain(statesSelected)
@@ -420,10 +480,6 @@ function update() {
 	d3.select("#chart-title")
 		.html(titlePrefix + groups[groupSelected])
 	
-	// filter by date, state, etc
-	// process the config
-	startDate = parseDate(elementValue("startDateButton"));
-	console.log("Start Date:" + startDate);
 	
 	let dataLowerLimit = new Date(startDate.getFullYear(),startDate.getMonth(),startDate.getDate()-7);
 	data = data.filter(function(d,i){ return statesSelected.indexOf(d.state) >= 0 && d.date >= dataLowerLimit; });
@@ -593,9 +649,12 @@ function updateStandard(data){
 			// move the circles that highlight each point
 			d3.selectAll(".mouse-per-line")
 			.attr("transform", (d, i) => {
-			  // find index in the data corresponding to the date/mouse position and position the circle x/y
-			  var idx = d3.bisector(d => d.date).left(d.values, xDate);
-			  return "translate(" + x(d.values[idx].date) + "," + y(d.values[idx][groupSelected]) + ")";
+				//console.log("transform: " + d.date + " i=" + i);
+				// find index in the data corresponding to the date/mouse position and position the circle x/y
+				var idx = d3.bisector(d => d.date).left(d.values, xDate);
+				
+				if (d.values[idx] == null) return "translate(-500,-500)";
+				return "translate(" + x(d.values[idx].date) + "," + y(d.values[idx][groupSelected]) + ")";
 			}); // end attr statement
 			
 			// move the vertical line
@@ -708,12 +767,14 @@ function updateTooltipContentStandard(mouse) {
 	sortingObj = []
 	sumstat.map(d => {
 	  var idx = d3.bisector(d => d.date).left(d.values, xDate);
-	  sortingObj.push(
-		{	
-			key: d.values[idx].series, 
-			num: d.values[idx][groupSelected],
-			date: d.values[idx].date
-		})
+	  if (d.values[idx] != null) {
+		  sortingObj.push(
+			{	
+				key: d.values[idx].series, 
+				num: d.values[idx][groupSelected],
+				date: d.values[idx].date
+			})
+	  }
 	}) // close map()
 
 	// sort them by key, descending
@@ -744,12 +805,12 @@ function updateTooltipContentStandard(mouse) {
 	  .append('div')
 	  .style('color', d => {
 		var idx = d3.bisector(d => d.date).left(d.values, xDate);
-		return colorByState(d.values[idx].state)
+		return d.values[idx] == null ? "black" : colorByState(d.values[idx].state)
 	  })
 	  .html(d => {
 		var idx = d3.bisector(d => d.date).left(d.values, xDate)
 		var row = d.values[idx];
-		if (row[groupSelected] == null) return "";	
+		if (row == null || row[groupSelected] == null) return "";	
 		var pctChgMsg = "";
 		if (row.surge == "Year 2" && row[groupSelected] != null && row.prior[groupSelected] != null){	
 			let pctChg = 100*(row[groupSelected]/row.prior[groupSelected]-1);
@@ -817,7 +878,7 @@ function updatePct(data){
 			if (d>1) {
 				return "+" + (100*(d-1)).toFixed(0) + "%";
 			} else if (d==1) {
-					return "Equal";
+					return "No Change";
 			} else {
 				return "-" + (100*(1-d)).toFixed(0) + "%";
 			}
