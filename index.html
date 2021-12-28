@@ -3,142 +3,143 @@
 <meta charset="utf-8">
 <head>
 	<title>Covid-19 Surge Comparison</title>
+	<style>
+	.svg-container {
+		display: block;
+		position: relative;
+		width: 92.5%;
+		height: 20%;
+		margin-left: 30px;
+		vertical-align: top;
+		overflow: visible;
+		padding-bottom: 40%;
+	}
+	#tooltip {
+		position:relative;
+		border: 2px solid dimgray;
+		background-color: lightgray;
+		padding-bottom: 5px;
+		padding-left: 5px;
+		padding-top: 5px;
+		font-weight: bold;
+		font-size: 18px;
+	}
+	.tt-div {
+		font-size: 14px;
+		font-weight: bold;
+	}
+	.svg-content {
+		display: block;
+		position: absolute;
+		top: 0;
+		left: 0;
+	}
+	#ttl {
+	  font-size: 36px;
+	  font-weight: bold;		
+	  padding-left:10px;
+	  padding-top:20px;
+	  padding-bottom:0px;
+	}
+	.lnk {
+		float: left;
+		width: 90%;
+		font-size: 18px;
+		font-size: 16px;
+		padding-bottom: 5px;
+		padding-top: 5px;
+		padding-left: 10px;
+	}
+	#selectButton {
+		height: 30px;
+		margin-right: 20px;
+	}
+	.stateButton {
+		height: 30px;
+		padding-left: 10px;
+	}
+	#startDateButton {
+		height: 30px;
+		margin-left: 10px;
+	}
+	#stateSpan {
+		padding-top: 10px;
+		height: 30px;
+		display: block;
+	}
+	#selectSpan {
+		padding-left: 10px;
+	}
+	#main {
+	  width: 90%;
+	  height: 75px;
+	  border: 2px solid #000000;
+	  margin-left: 40px;
+	  padding-left: 10px;
+	  padding-top: 10px;
+	  padding-bottom: 10px;
+	}
+	#controls {
+	  width: 90%;
+	  height: 100px;
+	  border: 2px solid #000000;
+	  margin-left: 40px;
+	  margin-top: 10px;
+	  padding-left: 10px;
+	  padding-bottom: 5px;
+	  padding-top: 10px;
+	}
+	#chart-title {
+	  width: 90%;
+	  height: 20px;
+	  margin-left: 40px;
+	  margin-top: 10px;
+	  padding-left: 10px;
+	  font-weight: bold;
+	  font-size: 20px;
+	  text-align: center;
+	}
+	#loadingContent {
+		width: 30%;
+		margin: auto;
+	}
+	#loadingMsg {
+		font-size: 20px;
+		font-weight: bold;
+		display: block;
+		margin: auto;
+	}
+	.loader {
+	  border: 8px solid #f3f3f3; /* Light grey */
+	  border-top: 8px solid #3498db; /* Blue */
+	  border-radius: 50%;
+	  width: 60px;
+	  height: 60px;
+	  margin: auto;
+	  animation: spin 2s linear infinite;
+	}
+
+	@keyframes spin {
+	  0% { transform: rotate(0deg); }
+	  100% { transform: rotate(360deg); }
+	}
+
+
+	</style>
+
+	<!-- Load d3.js and the surge-compare script -->
+	<script src="https://d3js.org/d3.v4.js"></script>
+	<script src="surge-compare-v1.js"></script>
 </head>
-
-<style>
-.svg-container {
-    display: block;
-    position: relative;
-    width: 92.5%;
-	height: 20%;
-	margin-left: 30px;
-    vertical-align: top;
-    overflow: visible;
-	padding-bottom: 40%;
-}
-#tooltip {
-	position:relative;
-	border: 2px solid dimgray;
-	background-color: lightgray;
-	padding-bottom: 5px;
-	padding-left: 5px;
-	padding-top: 5px;
-	font-weight: bold;
-	font-size: 18px;
-}
-.tt-div {
-	font-size: 14px;
-	font-weight: bold;
-}
-.svg-content {
-    display: block;
-    position: absolute;
-    top: 0;
-    left: 0;
-}
-#ttl {
-  font-size: 36px;
-  font-weight: bold;		
-  padding-left:10px;
-  padding-top:20px;
-  padding-bottom:0px;
-}
-.lnk {
-	float: left;
-	width: 90%;
-	font-size: 18px;
-	font-size: 16px;
-	padding-bottom: 5px;
-	padding-top: 5px;
-	padding-left: 10px;
-}
-#selectButton {
-	height: 30px;
-	margin-right: 20px;
-}
-.stateButton {
-	height: 30px;
-	padding-left: 10px;
-}
-#startDateButton {
-	height: 30px;
-	margin-left: 10px;
-}
-#stateSpan {
-	padding-top: 10px;
-	height: 30px;
-	display: block;
-}
-#selectSpan {
-	padding-left: 10px;
-}
-#main {
-  width: 90%;
-  height: 75px;
-  border: 2px solid #000000;
-  margin-left: 40px;
-  padding-left: 10px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-#controls {
-  width: 90%;
-  height: 100px;
-  border: 2px solid #000000;
-  margin-left: 40px;
-  margin-top: 10px;
-  padding-left: 10px;
-  padding-bottom: 5px;
-  padding-top: 10px;
-}
-#chart-title {
-  width: 90%;
-  height: 20px;
-  margin-left: 40px;
-  margin-top: 10px;
-  padding-left: 10px;
-  font-weight: bold;
-  font-size: 20px;
-  text-align: center;
-}
-#loadingContent {
-	width: 30%;
-	margin: auto;
-}
-#loadingMsg {
-	font-size: 20px;
-	font-weight: bold;
-	display: block;
-	margin: auto;
-}
-.loader {
-  border: 8px solid #f3f3f3; /* Light grey */
-  border-top: 8px solid #3498db; /* Blue */
-  border-radius: 50%;
-  width: 60px;
-  height: 60px;
-  margin: auto;
-  animation: spin 2s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-
-</style>
-
-<!-- Load d3.js and the surge-compare script -->
-<script src="https://d3js.org/d3.v4.js"></script>
-<script src="surge-compare-v1.js"></script>
 
 <!-- Call surge-compare startup() function when page finishes loading. -->
 <body onload=startup()>
 <div id="main">
 <span id="ttl">Covid-19 Surge Comparison by US State</span><br>
-<span class="lnk">Sources: NY Times, HealthData.gov<br>
-By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.org/">rarelyread.org</a></span>
+<span class="lnk">
+By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.org/">rarelyread.org</a><br>
+Sources: NY Times (cases/deaths), HealthData.gov (hosp), CDC (vaccinations)
+</span>
 </div>
 
 <div id="loadingContent">

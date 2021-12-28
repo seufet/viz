@@ -7,7 +7,8 @@
 	-find max dates for nyt, hhs series and note
 	-loading icon
 	
-	-vaccination: https://data.cdc.gov/api/views/unsk-b7fc/rows.csv?accessType=DOWNLOAD, Series_Complete_65Plus
+	-vaccination: https://data.cdc.gov/api/views/unsk-b7fc/rows.csv?accessType=DOWNLOAD, Series_Complete_Pop_Pct
+
 	
 	-Credits:
 	Tooltips: https://bl.ocks.org/dianaow/0da76b59a7dffe24abcfa55d5b9e163e
@@ -17,11 +18,22 @@
 	v2 Design:
 	-Select states: 1-5 --> nest by state
 	-Select data: case, death, hosp, vacc
-	-Select metric: % Change (1 Year), 7-Day Average (Per 100k), 7-Day Average
+	-Select metric: % Change (1 Year), 7-Day Average (Per 100k), 7-Day Average (Count)
 	-Select dates: start date, # months
 	
 	
-	- enter(). path, path, path, path for each metric with different classes: case, case-per, case-chg
+	- enter(). path, path, path, path for each metric with different classes: 
+		case, case-per, case-chg, etc.
+	- can cycle through data set multiple times adding line, legend entry, tool-tip with different class and column
+	-if metric is % change, we'll add 1 line per state; others will add 2 lines, but can show similar tt text regardless, only col 
+	  will change based on 100k vs raw
+	
+	-Tooltip:
+	  -MA
+	     Cases: 500 --> 750 (50% increase)
+		 Hosp:  100 --> 125 (25% increase)
+		 Deaths: 25 --> 20 (20% decrease)
+		 
 */
 
 
@@ -51,6 +63,7 @@ var colorByState;
 var hhsData;
 var nytData;
 var statePop;
+var vaccineData;
 
 var y, yAxis;
 var x, xAxis;
@@ -68,6 +81,7 @@ groupSelected = "cases_ma";
 
 // Map column names to user-friendly descriptions
 var groups = {
+	pctChange : "Covid % Change (1 year)",
 	cases_ma : "Covid Cases",
 	cases_100k_ma : "Covid Cases (per 100k)",
 	ip_covid_ma : "Covid Hospitalized",
@@ -97,9 +111,10 @@ var startMonths = {
 };
 
 // basic configuration
-var defaultStatesSelected = ["MA","NH","XX","XX","XX"];
+var defaultStatesSelected = ["MA","XX","XX","XX","XX"];
 var statesSelected;
 var defaultStartDate = "2021/06/01";
+var defaultData = "pctChange";
 var endDate = new Date();
 var paletteStr = "black,blue,brown,gray,red";
 
@@ -137,27 +152,6 @@ function startup(){
 /////////////////////////////////////////////////////////////////////////////////////////
 // UTILITY FUNCTIONS
 
-
-// Chained callback functions to read the data
-function hhsLoaded(error, data) {
-	console.log("hhsLoaded: " + data.length);
-	hhsData =  data;
-		
-	d3.select("#loadingMsg").html("Loading Cases/Death Data...");
-	d3.csv("https://seufet.github.io/viz/state_pop.csv", statePopLoaded);
-}
-
-function statePopLoaded(error, data) {
-	statePop = data;
-	console.log("statePopData: " + statePop.length);
-	
-	// Credit: NY Times, https://github.com/nytimes/covid-19-data
-	// Download: https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv	
-	//d3.csv("nyt_data.csv", loadPage);
-	d3.select("#loadingMsg").html("Loading State Demographic Data...");
-	d3.csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv", loadPage);
-}
-
 // utility to set value of a select box
 function selectElement(id, valueToSelect) {    
 	let element = document.getElementById(id);
@@ -169,14 +163,45 @@ function elementValue(id) {
 	return element.value;
 }
 
-// Finish getting the page ready after our data sets are loaded
-function loadPage(error, nyt) {
-	// Update loader
-	d3.select("#loadingMsg").html("Processing Data...");
 
-	// pre-process the data sets
+// Chained callback functions to read the data
+function hhsLoaded(error, data) {
+	console.log("hhsLoaded: " + data.length);
+	hhsData =  data;
+		
+	d3.select("#loadingMsg").html("Loading State Demographic Data...");
+	d3.csv("https://seufet.github.io/viz/state_pop.csv", statePopLoaded);
+}
+
+function statePopLoaded(error, data) {
+	statePop = data;
+	console.log("statePopData: " + statePop.length);
+	
+	// Credit: NY Times, https://github.com/nytimes/covid-19-data
+	// Download: https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv	
+	//d3.csv("nyt_data.csv", loadPage);
+	d3.select("#loadingMsg").html("Loading Cases/Deaths Data...");
+	d3.csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv", nytLoaded);
+}
+
+function nytLoaded(error, nyt) {
+//	-vaccination: https://data.cdc.gov/api/views/unsk-b7fc/rows.csv?accessType=DOWNLOAD, 
+	// save data
 	nytData = nyt;
 	console.log("nytData: " + nytData.length);
+	
+	d3.select("#loadingMsg").html("Loading Vaccination Data...");
+	d3.csv("https://data.cdc.gov/api/views/unsk-b7fc/rows.csv?accessType=DOWNLOAD", loadPage);
+}
+
+// Finish getting the page ready after our data sets are loaded
+function loadPage(error, vd) {
+	// save vaccine data 
+	vaccineData = vd;
+	console.log("vaccineData: " + vaccineData.length);
+	
+	// Update loader
+	d3.select("#loadingMsg").html("Processing Data...");
 	
 	// clean the state population info
 	let popLookup = {};
@@ -225,6 +250,16 @@ function loadPage(error, nyt) {
 		}
 	}
 	selectElement("startDateButton",defaultStartDate);
+	selectElement("selectButton",defaultData);
+	groupSelected = defaultData;
+
+	// prepare a lookup for the vaccination info
+	let vaccineLookup = {};
+	vaccineData.forEach(d => {
+			var mdyDate = d3.timeParse("%m/%d/%Y");
+			let pk = d.Location + "-" + mdyDate(d.Date).getTime();
+			vaccineLookup[pk] = d;
+	});
 
 	// prepare a lookup for the nyt info, note we leave date as a yyyy-mm-dd string
 	// nyt data set uses full state names, so we have to map
@@ -236,6 +271,9 @@ function loadPage(error, nyt) {
 	
 	// build a record lookup by date
 	let hhsLookup = {};
+	let vaccineGood = 0, vaccineBad = 0;
+	let lastVaxByState = {};
+	hhsData.sort((a, b) => (a.date > b.date) ? 1 : -1);
 	hhsData.forEach(function(d) {
 		d.dateStr = d.date.replace(/\//g,"-"); // replace / with -
 		d.surge = "Year 2";
@@ -257,12 +295,24 @@ function loadPage(error, nyt) {
 			//console.log("missing nyt data: " + d.state + "-" + d.dateStr);
 		}
 		
+		vaccineRow = vaccineLookup[d.state + "-" + d.date.getTime()];
+		if (vaccineRow != null) {
+			d.vaccine_pct = parseFloat(vaccineRow.Series_Complete_Pop_Pct);
+			lastVaxByState[d.state] = d.vaccine_pct;
+			vaccineGood++;
+		} else {
+			vaccineBad++;
+			// if vaccine data missing for a date, use last good value
+			if (lastVaxByState[d.state] != null) d.vaccine_pct = lastVaxByState[d.state];
+		}
+		
 		pop = popLookup[d.state];
 		d.ip_covid_100k = 100000*d.ip_covid/pop;
 		d.deaths_covid_100k = 100000*d.deaths_covid/pop;
 		d.pk = d.series + "-" + d.date.getTime();
 		hhsLookup[d.pk] = d;
 	});
+	console.log("vaccine good: " + vaccineGood + " - vaccineBad: " + vaccineBad);
 	
 	// prior year records
 	let priorYear = [];
@@ -282,6 +332,7 @@ function loadPage(error, nyt) {
 			priorRow.dateStr = d.dateStr;
 			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
 			priorYear.push(priorRow);
+			
 			d.prior = priorRow;
 		}
 	});
@@ -314,6 +365,26 @@ function loadPage(error, nyt) {
 	d3.select("#startDateButton").on("change", function(d) {
         update()
     })
+	
+	// Add Y axis
+	  svg.selectAll(".myYAxis").remove();
+	  y = d3.scaleLinear()
+		.domain([0, d3.max(hhsData, function(d) { return +d[groupSelected]; })])
+		.range([ height-75, 0 ]);
+	  yAxis = d3.axisLeft().scale(y);
+	  svg.append("g")  
+	  .attr("class","myYaxis")
+	  .call(yAxis);
+	  
+	  x = d3.scaleTime()
+    .domain(d3.extent(hhsData, function(d) { return d.date; }))
+    .range([ 0, width ]);
+	xAxis = d3.axisBottom(x).scale(x).tickFormat(d3.timeFormat("%b %d"));
+  
+	  svg.append("g")
+	.attr("class","myXAxis")
+    .attr("transform", "translate(0," + (height-75) + ")")
+    .call(xAxis);
 
 	// start off with a selection
 	update();
@@ -346,7 +417,7 @@ function update() {
 	statesSelected.sort();
 	
 	// update title
-	d3.select("div#chart-title")
+	d3.select("#chart-title")
 		.html(titlePrefix + groups[groupSelected])
 	
 	// filter by date, state, etc
@@ -400,9 +471,37 @@ function update() {
 			}
 			//data[i].deaths_covid_rollsum = data[i-1].deaths_covid_rollsum + data[i].deaths_covid;
 		}
+		
+		// now that the moving averages are calculate, do the pct change
+		seriesData.forEach(d => {
+			if (d.prior == null) return;
+			if (d.prior.cases_ma != 0){
+				//d.change_cases_ma = 100*(d.cases_ma/d.prior.cases_ma-1);
+				d.change_cases_ma = (d.cases_ma/d.prior.cases_ma);
+				//if (d.state == "MA") console.log(d.date + "-" + d.cases_ma + "-" + d.prior.cases_ma + "-" + d.change_cases_ma);
+			}
+			if (d.prior.ip_covid_ma != 0){
+				//d.change_ip_covid_ma = 100*(d.ip_covid_ma/d.prior.ip_covid_ma-1);
+				d.change_ip_covid_ma = (d.ip_covid_ma/d.prior.ip_covid_ma);
+				//if (d.state == "MA") console.log(d.date + "-" + d.ip_covid_ma + "-" + d.prior.ip_covid_ma + "-" + d.change_ip_covid_ma);
+			}
+			if (d.prior.deaths_ma != 0){
+				//d.change_deaths_ma = 100*(d.deaths_ma/d.prior.deaths_ma-1);
+				d.change_deaths_ma = (d.deaths_ma/d.prior.deaths_ma);
+				//if (d.state == "MA") console.log(d.date + "-" + d.deaths_ma + "-" + d.prior.deaths_ma + "-" + d.change_deaths_ma);
+			}
+		});	
 	});
-	
 
+	if (groupSelected == "pctChange") {
+		updatePct(data);
+	} else {
+		updateStandard(data);
+	}
+}
+
+// Draws the standard chart
+function updateStandard(data){
   // group the data: I want to draw one line per group
   sumstat = d3.nest() // nest function allows to group the calculation per level of a factor
 	.key(function(d) { return d.series;})
@@ -424,14 +523,7 @@ function update() {
     .attr("transform", "translate(0," + (height-75) + ")")
     .call(xAxis);
 
-  // Add Y axis
-  y = d3.scaleLinear()
-    .domain([0, d3.max(data, function(d) { return +d.ip_covid_ma; })])
-    .range([ height-75, 0 ]);
-  yAxis = d3.axisLeft().scale(y);
-  svg.append("g")  
-  .attr("class","myYaxis")
-  .call(yAxis);
+  
 
   ////////////////////////////////////////////////////////
   // tool-tip stuff
@@ -491,17 +583,21 @@ function update() {
 		var mouse = d3.mouse(this);  
 		var xDate = x.invert(mouse[0]); // get date corresponding to mouse x position
 		
-		// move the circles that highlight each point
-		d3.selectAll(".mouse-per-line")
-		.attr("transform", (d, i) => {
-		  // find index in the data corresponding to the date/mouse position and position the circle x/y
-		  var idx = d3.bisector(d => d.date).left(d.values, xDate);
-		  return "translate(" + x(d.values[idx].date) + "," + y(d.values[idx][groupSelected]) + ")";
-		}); // end attr statement
-		
-		// move the vertical line
-		d3.select(".mouse-line")
-			.attr("d", () => ("M" + x(xDate) + "," + (chartHeight-40) + " " + x(xDate) + "," + 0));
+		if (groupSelected == "pctChange"){
+				console.log("pctChange mouse move");
+		} else {
+			// move the circles that highlight each point
+			d3.selectAll(".mouse-per-line")
+			.attr("transform", (d, i) => {
+			  // find index in the data corresponding to the date/mouse position and position the circle x/y
+			  var idx = d3.bisector(d => d.date).left(d.values, xDate);
+			  return "translate(" + x(d.values[idx].date) + "," + y(d.values[idx][groupSelected]) + ")";
+			}); // end attr statement
+			
+			// move the vertical line
+			d3.select(".mouse-line")
+				.attr("d", () => ("M" + x(xDate) + "," + (chartHeight-40) + " " + x(xDate) + "," + 0));
+		}
 		
 		// update the text in the box
 		updateTooltipContent(mouse);
@@ -591,6 +687,15 @@ function update() {
 // This is called by the chart's mouse movement listener  
 // to write the text that shows in the tooltip box
 function updateTooltipContent(mouse) {
+	if (groupSelected == "pctChange"){
+		updateTooltipContentPct(mouse);
+	} else{
+		updateTooltipContentStandard(mouse);
+	}
+}
+
+// the standard tool-tip text box content
+function updateTooltipContentStandard(mouse) {
 	// date for mouse x pos
 	var xDate = x.invert(mouse[0])
 	  
@@ -624,7 +729,8 @@ function updateTooltipContent(mouse) {
 	// tooltip box text
 	
 	// date at the top and box position
-	tooltip.html(sortingObj[0].date.toLocaleDateString('en-us', { year:"numeric", month:"short", day:"numeric"}))
+	let localDate = sortingObj[0].date.toLocaleDateString('en-us', { year:"numeric", month:"short", day:"numeric"});
+	tooltip.html(localDate + " vs One Year Earlier")
 	  .style('left', (d3.event.pageX>500?d3.event.pageX-380:d3.event.pageX) + "px") // choose left or right of cursor depending on 
 	  .style('top', (d3.event.pageY - 280) + "px")
 	  .style('width', "300px")
@@ -643,10 +749,295 @@ function updateTooltipContent(mouse) {
 		var pctChgMsg = "";
 		if (row.surge == "Year 2" && row[groupSelected] != null && row.prior[groupSelected] != null){	
 			let pctChg = 100*(row[groupSelected]/row.prior[groupSelected]-1);
-			pctChgMsg = " (" + Math.abs(pctChg.toFixed(0)) + "% " + (pctChg>0 ? "Increase)" : "Decrease)");
+			pctChgMsg = " (" + Math.abs(pctChg.toFixed(0)) + "% " + (pctChg>0 ? "Up" : "Down");
+			if (row.vaccine_pct != null) pctChgMsg += ", " + row.vaccine_pct.toFixed(0) + "% Vacc)";
+			else pctChgMsg += ")";
 		} 
 		// show series, # of output variable with correct # decimal places
 		return d.key + ": " + row[groupSelected].toFixed(decimals[groupSelected]) + pctChgMsg;
+	  })
+	  .style("font-size","16px")
+	  .style("font-weight","normal")
+}
+
+// global
+var nestedData;
+var legendLabels = ["Cases % Chg","Hosp % Chg","Deaths % Chg"];
+	
+// Draws the pctChange chart
+function updatePct(data){
+	
+	console.log("pctChange update");
+  // group the data: for each state, separate lines for cases, hosp, death
+  
+  // concat data for grouping
+  // restrict to date range/year 2 surge, then have series for case, hosp, death
+  data = data.filter((d,i) => d.date >= startDate && d.surge == "Year 2");
+  console.log("updatePct initial data: " + data.length);
+
+	toAdd = [];
+	data.forEach(d => {
+		let hospRow = Object.assign({}, d);
+		hospRow.pct_series = d.state + "," + 1;
+		hospRow.pct_value = parseFloat(d.change_ip_covid_ma);
+		toAdd.push(hospRow);
+		
+		let deathRow = Object.assign({}, d);
+		deathRow.pct_series = d.state + "," + 2;
+		deathRow.pct_value = parseFloat(d.change_deaths_ma);
+		toAdd.push(deathRow);
+		
+		d.pct_series = d.state + "," + 0;
+		d.pct_value = parseFloat(d.change_cases_ma);
+	});
+	data = data.concat(toAdd);
+	console.log("rows after series creation: " + data.length);
+
+	// update y axis to show logarithmic as decreases are in range 0-1 and increase e.g. 1-20.
+	// the domain needs to include the max/min value of all 3 metrics for each state/date
+	dataMin = d3.min(data, d => Math.min(d.change_cases_ma,d.change_deaths_ma,d.change_ip_covid_ma));
+	dataMax = d3.max(data, d => Math.max(d.change_cases_ma,d.change_deaths_ma,d.change_ip_covid_ma));
+	console.log("Y axis min/max: " + dataMin + " - " + dataMax);
+	logY = d3.scaleLog().domain([dataMin, dataMax]).range([ height-75, 0 ]);
+	//yAxis.scale(logY);
+	svg.selectAll(".myYaxis")
+		.transition()
+		.duration(1000)
+		.call(d3.axisLeft().scale(logY).ticks(8,(d,i)=>{
+			if (d>1) {
+				return "+" + (100*(d-1)).toFixed(0) + "%";
+			} else if (d==1) {
+					return "Equal";
+			} else {
+				return "-" + (100*(1-d)).toFixed(0) + "%";
+			}
+			
+		}));
+		
+	svg.selectAll(".myXAxis").remove();
+  x = d3.scaleTime()
+    .domain(d3.extent(data, function(d) { return d.date; }))
+    .range([ 0, width ]);
+  xAxis = d3.axisBottom(x).scale(x).tickFormat(d3.timeFormat("%b %d"));
+  svg.append("g")
+	.attr("class","myXAxis")
+    .attr("transform", "translate(0," + (height-75) + ")")
+    .call(xAxis);
+		
+	// group by state then series (i.e. cases, deaths, hosp)
+	nestedData = d3.nest()
+		.key(d => d.pct_series)
+		.entries(data);
+	//console.log(nestedData);
+	
+	dashPatterns = ["3,0","3,3","5,2"];
+	
+	  // Draw the lines	
+	  var u = svg.selectAll(".lineTest").data(nestedData);
+	  u.enter()
+		.append("path")
+		.attr("class","lineTest")
+		.merge(u)
+		.transition()
+		.duration(1000)
+		.attr("d", function(d){
+			console.log("d function: " + d.key + " values=" + d.values.length);
+			return d3.line()
+				// this clips the lines so they won't go beyond the axis limit!
+				.defined(d => d.date >= startDate)
+				.x(function(d) { return x(d.date); })
+				.y(function(d) { return logY(+d.pct_value); }) // note we use the log y function, not the linear for standard mode
+				(d.values)
+		})
+	  .attr("fill", "none")
+	  .attr("stroke", d => colorByState(d.key.substring(0,2)))
+	  .style("stroke-width", 2)
+	  // Year 2 not dashed, Year 1 dashed
+		.style("stroke-dasharray", d => {
+			let tag = d.key.split(",")[1];
+			return dashPatterns[tag];
+		})	
+	u.exit().remove(); // remove any unused lines
+	
+	// Add a short line in the legend for each entry.
+	pctSeries = Array.from(new Set(data.map(d => d.pct_series)));
+	pctSeries.sort();
+	console.log("SERIES:" + pctSeries);
+	
+	var lineLength = 20;
+	var totalLength = 130;
+	svg.selectAll(".legendLines").remove();
+	legendLines = svg.selectAll(".legendLines").data(pctSeries);
+	legendLines
+	  .enter()
+	  .append("line")
+	  .merge(legendLines)
+		.attr("class","legendLines")
+		.attr("x1", (d,i) => 50+totalLength*Math.floor(i/3))
+		.attr("x2", (d,i) => lineLength+50+totalLength*Math.floor(i/3))
+		.attr("y1", (d,i) => height-40+15*(i%3))
+		.attr("y2", (d,i) => height-40+15*(i%3))
+		.attr("stroke", d => colorByState(d.substring(0,2)))
+		.style("stroke-width", 2)
+		.style("stroke-dasharray", (d,i) => dashPatterns[i%3])
+	
+	// Add legend text
+	svg.selectAll(".legendText").remove();
+	legendText = svg.selectAll(".legendText")
+	  .data(pctSeries);
+	 legendText
+	  .enter()
+	  .append("text")
+		.merge(legendText)
+		.attr("class","legendText")
+		.attr("x", (d,i) => 5+lineLength+50+totalLength*Math.floor(i/3))
+		.attr("y", (d,i) => height-39+15*(i%3))
+		.style("fill", d => colorByState(d.substring(0,2)))
+		.style("font", "12px times")
+		.text((d,i) => d.substring(0,2)+" "+legendLabels[i%3])
+		.attr("text-anchor", "left")
+		.style("alignment-baseline", "middle")
+
+  ////////////////////////////////////////////////////////
+  // tool-tip stuff
+
+	// rebuild all tool-tip stuff from scratch on each call to update()
+	svg.selectAll(".mouse-over-effects").remove();
+
+  mouseG = svg.append("g")
+	.attr("class", "mouse-over-effects");
+
+  mouseG.append("path") // create vertical line to follow mouse
+	.attr("class", "mouse-line")
+	.style("stroke", "#A9A9A9")
+	.style("stroke-width", "2px")
+	.style("opacity", "0");
+
+  // for the little circles on the vertical line
+  var mousePerLine = mouseG.selectAll('.mouse-per-line')
+	.data(nestedData)
+	.enter()
+	.append("g")
+	.attr("class", "mouse-per-line");
+
+  mousePerLine.append("circle")
+	.attr("r", 4)
+	.style("stroke", d => {
+		return colorByState(d.key.substring(0,2));
+	})
+	.style("fill", "none")
+	.style("stroke-width", "2px")
+	.style("opacity", "0");
+
+  mouseG.append('svg:rect') // append a rect to catch mouse movements on canvas
+	.attr('width', width) 
+	.attr('height', height)
+	.attr('fill', 'none')
+	.attr('pointer-events', 'all')
+	.on('mouseout', function () { // on mouse out hide line, circles and text
+	  d3.select(".mouse-line")
+		.style("opacity", "0");
+	  d3.selectAll(".mouse-per-line circle")
+		.style("opacity", "0");
+	  d3.selectAll(".mouse-per-line text")
+		.style("opacity", "0");
+	  d3.selectAll("#tooltip")
+		.style('display', 'none')
+	})
+	.on('mouseover', () => { // on mouse in show line, circles and text
+	  d3.select(".mouse-line")
+		.style("opacity", "1");
+	  d3.selectAll(".mouse-per-line circle")
+		.style("opacity", "1");
+	  d3.selectAll("#tooltip")
+		.style('display', 'block')
+	})
+	.on('mousemove', function() { // update tooltip content, line, circles and text when mouse moves
+		var mouse = d3.mouse(this);  
+		var xDate = x.invert(mouse[0]); // get date corresponding to mouse x position
+		
+		// move the circles that highlight each point
+		d3.selectAll(".mouse-per-line")
+		.attr("transform", (d, i) => {
+		  // find index in the data corresponding to the date/mouse position and position the circle x/y
+		  var idx = d3.bisector(d => d.date).left(d.values, xDate);
+		  return "translate(" + x(d.values[idx].date) + "," + logY(d.values[idx].pct_value).toFixed(0) + ")";
+		}); // end attr statement
+		
+		// move the vertical line
+		d3.select(".mouse-line")
+			.attr("d", () => ("M" + x(xDate) + "," + (chartHeight-40) + " " + x(xDate) + "," + 0));
+		
+		// update the text in the box
+		updateTooltipContentPct(mouse);
+	})
+}
+
+// tooltip text content if pctChange selected
+function updateTooltipContentPct(mouse) {
+	//console.log("pctChange tooltip");
+	// date for mouse x pos
+	var xDate = x.invert(mouse[0])
+	  
+	// XXX this sorting can likely be simplified...we just want to sort by state abbreviation...
+	// populate sortingObj with EACH match in the various groups
+	sortingObj = []
+	nestedData.map(d => {
+	  var idx = d3.bisector(d => d.date).left(d.values, xDate);
+	  sortingObj.push(
+		{	
+			key: d.values[idx].pct_series, 
+			num: d.values[idx].pct_value,
+			date: d.values[idx].date
+		})
+	}) // close map()
+
+	// sort them by key, descending
+	sortingObj.sort(function(x, y){
+	   return d3.ascending(x.key, y.key);
+	})
+
+	// strip keys
+	var sortingArr = sortingObj.map(d=> d.key)
+
+	// sort by series title
+	var nested1 = nestedData.slice().sort((a, b) => (sortingArr.indexOf(a.key) - sortingArr.indexOf(b.key)))
+	
+	//console.log("pageX=" + d3.event.pageX + " pageY=" + d3.event.pageY);
+
+	/////////////////////////////////////////////////////////////////////
+	// tooltip box text
+
+	var ttLabels = ["Cases","Hosp","Deaths"];
+	
+	// date at the top and box position
+	let localDate = sortingObj[0].date.toLocaleDateString('en-us', { year:"numeric", month:"short", day:"numeric"});
+	tooltip.html(localDate + " vs One Year Earlier")
+	  .style('left', (d3.event.pageX>500?d3.event.pageX-380:d3.event.pageX) + "px") // choose left or right of cursor depending on 
+	  .style('top', (d3.event.pageY - 280) + "px")
+	  .style('width', "300px")
+	  .style('padding-bottom', "10px")
+	  .selectAll()
+	  .data(nested1).enter() // now a separate line for each series
+	  .append('div')
+	  .style('color', d => {
+		var idx = d3.bisector(d => d.date).left(d.values, xDate);
+		return colorByState(d.values[idx].state)
+	  })
+	  .html(d => {
+		var idx = d3.bisector(d => d.date).left(d.values, xDate)
+		var row = d.values[idx];
+		if (row.pct_value == null) return "";	
+		var pctChgMsg = "";
+		if (row.pct_value == 1) pctChgMsg = "Unchanged";
+		else if (row.pct_value > 1) pctChgMsg = (100*(row.pct_value-1)).toFixed(0) + "% Increase";
+		else pctChgMsg = (Math.abs(row.pct_value-1)*100).toFixed(0) + "% Decrease";
+		
+		// show series, # of output variable with correct # decimal places
+		let seriesIdx = d.key.split(",")[1];
+		let seriesDesc = row.state + " " + ttLabels[seriesIdx] + ": " + pctChgMsg;
+		if (seriesIdx == 0) return row.state + " " + "Fully Vacc: " + (row.vaccine_pct.toFixed(0)) + "%<br>"+seriesDesc;
+		else return seriesDesc;
 	  })
 	  .style("font-size","16px")
 	  .style("font-weight","normal")
