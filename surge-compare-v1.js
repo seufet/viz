@@ -864,6 +864,8 @@ function updatePct(data){
 	// the domain needs to include the max/min value of all 3 metrics for each state/date
 	dataMin = d3.min(data, d => Math.min(d.change_cases_ma,d.change_deaths_ma,d.change_ip_covid_ma));
 	dataMax = d3.max(data, d => Math.max(d.change_cases_ma,d.change_deaths_ma,d.change_ip_covid_ma));
+	if (dataMin == 0) dataMin = 0.01; // avoid 0, which will be NaN for log(x)
+	if (dataMax > 50 || dataMax == "Infinity") dataMax = 50; // avoid infinite
 	console.log("Y axis min/max: " + dataMin + " - " + dataMax);
 	logY = d3.scaleLog().domain([dataMin, dataMax]).range([ height-75, 0 ]);
 	//yAxis.scale(logY);
