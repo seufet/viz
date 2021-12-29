@@ -63,6 +63,7 @@ var colorByState;
 var hhsData;
 var nytData;
 var statePop;
+var popLookup;
 var vaccineData;
 var hhsLookup = {};
 
@@ -213,7 +214,7 @@ function loadPage(error, vd) {
 	d3.select("#loadingMsg").html("Processing Data...");
 	
 	// clean the state population info
-	let popLookup = {};
+	popLookup = {};
 	stateNameLookup = {"None":"XX"};
 	statePop.forEach(d => {
 		d.population = d.population.replace(/,/g,""); // strip out any commas
@@ -654,7 +655,7 @@ function updateStandard(data){
 			
 			// move the vertical line
 			d3.select(".mouse-line")
-				.attr("d", () => ("M" + x(xDate) + "," + (chartHeight-40) + " " + x(xDate) + "," + 0));
+				.attr("d", () => ("M" + x(xDate) + "," + (chartHeight-15) + " " + x(xDate) + "," + 0));
 		}
 		
 		// update the text in the box
@@ -1033,7 +1034,7 @@ function updatePct(data){
 		
 		// move the vertical line
 		d3.select(".mouse-line")
-			.attr("d", () => ("M" + x(xDate) + "," + (chartHeight-40) + " " + x(xDate) + "," + 0));
+			.attr("d", () => ("M" + x(xDate) + "," + (chartHeight-15) + " " + x(xDate) + "," + 0));
 		
 		// update the text in the box
 		updateTooltipContentPct(mouse);
@@ -1117,10 +1118,12 @@ function updateTooltipContentPct(mouse) {
 
 ////////////////////////////////////////////////////////////////////////
 // Table sorting
-function sortTable(table, col, reverse) {
-    var tb = table.tBodies[0], // use `<tbody>` to ignore `<thead>` and `<tfoot>` rows
-        tr = Array.prototype.slice.call(tb.rows, 0), // put rows into array
-        i;
+
+// note this allows not sorting certain rows at the top
+function sortTable(table, col, reverse, startIdx) {
+    let tb = table.tBodies[0]; // use `<tbody>` to ignore `<thead>` and `<tfoot>` rows
+    let tr = Array.prototype.slice.call(tb.rows, 1); // put rows into array
+    let i;
     reverse = -((+reverse) || -1);
     tr = tr.sort(function (a, b) { // sort rows
 		as = a.cells[col].textContent.trim().replace("%","");
@@ -1148,7 +1151,7 @@ function makeSortable(table) {
     else return; // if no `<thead>` then do nothing
     while (--i >= 0) (function (i) {
         var dir = 1;
-        th[i].addEventListener('click', function () {sortTable(table, i, (dir = 1 - dir))});
+        th[i].addEventListener('click', function () {sortTable(table, i, (dir = 1 - dir), 1)});
     }(i));
 }
 
@@ -1177,7 +1180,7 @@ function movingAverage(dataSet, col, dt, days){
 	let dtOne = new Date(dt.getTime()-days*oneDay);
 	
 	// filter to date range and sort
-	dataSet = dataSet.filter(d=>d.date<dt && d.date>=dtOne);
+	dataSet = dataSet.filter(d=>d.date.getTime()<dt.getTime() && d.date.getTime()>=dtOne.getTime());
 	//dataSet.sort((a, b) => (a.date > b.date) ? 1 : -1);
 		
 	//let sum = dataSet.reduce((a, b) => a + (b[col] || 0), 0);
@@ -1189,7 +1192,7 @@ function movingAverage(dataSet, col, dt, days){
 function prepareTableStateData(stateName,stateAbbr){
 	//console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
 
-	st = hhsData.filter(d => d.state == stateAbbr);
+	st = hhsData.filter(d => d.state == stateAbbr && d.surge == "Year 2");
 	lastDay = st[st.length-1];
 	oneYearAgo = st[st.length-366];
 	console.log("last day:" + lastDay.date + " year ago=" + oneYearAgo.date);
@@ -1212,7 +1215,60 @@ function prepareTableStateData(stateName,stateAbbr){
 	tblData.push(tbl);
 }
 
+// gather the data for the whole US, push as the first row in the state summary table
+function prepareTableUSData(){
+	let usPop = d3.sum(Object.values(popLookup));
+	
+	data = hhsData.filter(d => d.surge == "Year 2");
+	
+	lastDate = d3.max(data,d => d.date);
+	oneYearAgoDate = new Date(lastDate.getFullYear()-1,lastDate.getMonth(),lastDate.getDate());
+	
+	lastDay = data.filter(d => d.date.getTime() == lastDate.getTime());
+	oneYearAgo = data.filter(d => d.date.getTime() == oneYearAgoDate.getTime());
+	
+	console.log("last day:" + lastDate + " year ago=" + oneYearAgoDate);
+	console.log("hhsRecords=" + data.length + " last day records:" + lastDay.length + " year ago=" + oneYearAgo.length);
+	
+	// cases
+	oldCases = (d3.sum(oneYearAgo, d=>d.cases_ma)*100000/usPop);
+	cases = (d3.sum(lastDay, d=>d.cases_ma)*100000/usPop);
+	casesPct = oldCases == 0 ? "Infinite (previous value=0)" : tablePctValue(cases/oldCases);
+	
+	hosp = movingAverage(data, "ip_covid", lastDate, 7)*100000/usPop;
+	oldHosp = movingAverage(data, "ip_covid", oneYearAgoDate, 7)*100000/usPop;
+	hospPct = oldHosp == 0 ? "Infinite (previous value=0)" : tablePctValue(hosp/oldHosp);
+
+	// deaths
+	oldDeaths = (d3.sum(oneYearAgo, d=>d.deaths_ma)*100000/usPop);
+	deaths = (d3.sum(lastDay, d=>d.deaths_ma)*100000/usPop);
+	deathsPct = oldDeaths == 0 ? "Infinite (previous value=0)" : tablePctValue(deaths/oldDeaths);
+	
+	// vaccines
+	totalVac = 0.0;
+	lastDay.forEach((d,i) => {
+		if (popLookup[d.state] != null){
+			totalVac += parseFloat(d.vaccine_pct)*popLookup[d.state]/100.0;
+		}
+	});
+	vacPct = 100.0*totalVac/usPop;
+	
+	
+	tbl = [];
+	tbl[0] = "United States";
+	tbl[1] = cases.toFixed(1);
+	tbl[2] = oldCases == 0 ? "Infinite (previous value=0)" : tablePctValue(cases/oldCases);
+	tbl[3] = hosp.toFixed(1);
+	tbl[4] = oldHosp == 0 ? "Infinite (previous value=0)" : tablePctValue(hosp/oldHosp);
+	tbl[5] = deaths.toFixed(2);
+	tbl[6] = oldDeaths == 0 ? "Infinite (previous value=0)" : tablePctValue(deaths/oldDeaths);
+	tbl[7] = vacPct.toFixed(1) + "%";
+	tblData.push(tbl);
+}
+
+
 function prepareTableData(){
+	prepareTableUSData();
 	let keys = Object.keys(stateNameLookup);
 	keys.forEach(d => {
 		if (d != "None"){
