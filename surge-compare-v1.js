@@ -1194,8 +1194,13 @@ function prepareTableStateData(stateName,stateAbbr){
 
 	st = hhsData.filter(d => d.state == stateAbbr && d.surge == "Year 2");
 	st.sort((a, b) => (a.date > b.date) ? 1 : -1);
-	lastDay = st[st.length-1];
-	oneYearAgo = st[st.length-366];
+	
+	idx = st.length-1;
+	while (st[idx].cases_100k_ma == null || 
+		st[idx].ip_covid == null ||
+		st[idx].vaccine_pct == null) idx--; // find last day with all data present
+	lastDay = st[idx];
+	oneYearAgo = st[idx-365];
 	console.log("last day:" + lastDay.date + " year ago=" + oneYearAgo.date);
 
 	// moving avg for 1 year ago
