@@ -1190,7 +1190,7 @@ function movingAverage(dataSet, col, dt, days){
 
 // gather the data for a given state
 function prepareTableStateData(stateName,stateAbbr){
-	console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
+	//console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
 
 	st = hhsData.filter(d => d.state == stateAbbr && d.surge == "Year 2");
 	st.sort((a, b) => (a.date > b.date) ? 1 : -1);
@@ -1226,15 +1226,24 @@ function prepareTableUSData(){
 	let usPop = d3.sum(Object.values(popLookup));
 	
 	data = hhsData.filter(d => d.surge == "Year 2");
+	data.sort((a, b) => (a.date > b.date) ? 1 : -1);
 	
-	lastDate = d3.max(data,d => d.date);
+	st = data.filter(d => d.state == "MA" && d.surge == "Year 2");
+	st.sort((a, b) => (a.date > b.date) ? 1 : -1);
+	
+	idx = st.length-1;
+	while (st[idx].cases_100k_ma == null || 
+		st[idx].ip_covid == null ||
+		st[idx].vaccine_pct == null) idx--; // find last day with all data present
+	lastDate = st[idx].date;
+	//console.log("US table last date:" + lastDate);
+	
 	oneYearAgoDate = new Date(lastDate.getFullYear()-1,lastDate.getMonth(),lastDate.getDate());
-	
 	lastDay = data.filter(d => d.date.getTime() == lastDate.getTime());
 	oneYearAgo = data.filter(d => d.date.getTime() == oneYearAgoDate.getTime());
 	
-	console.log("last day:" + lastDate + " year ago=" + oneYearAgoDate);
-	console.log("hhsRecords=" + data.length + " last day records:" + lastDay.length + " year ago=" + oneYearAgo.length);
+	console.log("US table last day:" + lastDate + " year ago=" + oneYearAgoDate);
+	console.log("US Records=" + data.length + " last day records:" + lastDay.length + " year ago=" + oneYearAgo.length);
 	
 	// cases
 	oldCases = (d3.sum(oneYearAgo, d=>d.cases_ma)*100000/usPop);
