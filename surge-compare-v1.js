@@ -1190,9 +1190,10 @@ function movingAverage(dataSet, col, dt, days){
 
 // gather the data for a given state
 function prepareTableStateData(stateName,stateAbbr){
-	//console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
+	console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
 
 	st = hhsData.filter(d => d.state == stateAbbr && d.surge == "Year 2");
+	st.sort((a, b) => (a.date > b.date) ? 1 : -1);
 	lastDay = st[st.length-1];
 	oneYearAgo = st[st.length-366];
 	console.log("last day:" + lastDay.date + " year ago=" + oneYearAgo.date);
