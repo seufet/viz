@@ -837,21 +837,41 @@ function updatePct(data){
   console.log("updatePct initial data: " + data.length);
 
 	toAdd = [];
+	lastGoodHosp = 1;
+	lastGoodCases = 1;
+	lastGoodDeaths = 1;
 	data.forEach(d => {
 		let hospRow = Object.assign({}, d);
 		hospRow.pct_series = d.state + "," + 1;
 		hospRow.pct_value = parseFloat(d.change_ip_covid_ma);
+		if (!isFinite(hospRow.pct_value)) hospRow.pct_value = lastGoodHosp;
+		else if (hospRow.pct_value == 0) hospRow.pct_value = 0.01;
+		lastGoodHosp = hospRow.pct_value;
 		toAdd.push(hospRow);
 		
 		let deathRow = Object.assign({}, d);
 		deathRow.pct_series = d.state + "," + 2;
 		deathRow.pct_value = parseFloat(d.change_deaths_ma);
+		if (!isFinite(deathRow.pct_value)) deathRow.pct_value = lastGoodDeaths;
+		else if (deathRow.pct_value == 0) deathRow.pct_value = 0.01;
+		else lastGoodDeaths = deathRow.pct_value;
 		toAdd.push(deathRow);
 		
 		d.pct_series = d.state + "," + 0;
 		d.pct_value = parseFloat(d.change_cases_ma);
+		if (!isFinite(d.pct_value)) d.pct_value = lastGoodCases;
+		else if (d.pct_value == 0) d.pct_value = 0.01;
+		else lastGoodCases = d.pct_value;
+		
+		//if (!isFinite(parseFloat(d.change_ip_covid_ma))) console.log("bad parse ip_covid: " + d.change_ip_covid_ma + " - " + d.date);
+		//if (!isFinite(parseFloat(d.change_deaths_ma))) console.log("bad parse deaths: " + d.change_death_ma + " - " + d.date);
+		//if (!isFinite(parseFloat(d.change_cases_ma))) console.log("bad parse cases: " + d.change_cases_ma + " - " + d.date);
 	});
 	data = data.concat(toAdd);
+	
+	badData = data.filter(d => !isFinite(d.pct_value));
+	console.log("rows with non-finite data:" + badData.length);
+	if (badData.length > 0) console.log("bad data: " + badData[0].pct_value);
 	//console.log("rows after series creation: " + data.length);
 
 	/*nh = data.filter(d => d.pct_series == "NH,2");
@@ -862,10 +882,12 @@ function updatePct(data){
 
 	// update y axis to show logarithmic as decreases are in range 0-1 and increase e.g. 1-20.
 	// the domain needs to include the max/min value of all 3 metrics for each state/date
-	dataMin = d3.min(data, d => Math.min(d.change_cases_ma,d.change_deaths_ma,d.change_ip_covid_ma));
-	dataMax = d3.max(data, d => Math.max(d.change_cases_ma,d.change_deaths_ma,d.change_ip_covid_ma));
+	//dataMin = d3.min(data, d => Math.min(d.change_cases_ma,d.change_deaths_ma,d.change_ip_covid_ma));
+	//dataMax = d3.max(data, d => Math.max(d.change_cases_ma,d.change_deaths_ma,d.change_ip_covid_ma));
+	dataMin = d3.min(data, d => d.pct_value);
+	dataMax = d3.max(data, d => d.pct_value);
 	if (dataMin == 0) dataMin = 0.01; // avoid 0, which will be NaN for log(x)
-	if (dataMax > 50 || dataMax == "Infinity") dataMax = 50; // avoid infinite
+	if (dataMax > 50 || !isFinite(dataMax)) dataMax = 50; // avoid infinite
 	console.log("Y axis min/max: " + dataMin + " - " + dataMax);
 	logY = d3.scaleLog().domain([dataMin, dataMax]).range([ height-75, 0 ]);
 	//yAxis.scale(logY);
@@ -1030,7 +1052,9 @@ function updatePct(data){
 		.attr("transform", (d, i) => {
 		  // find index in the data corresponding to the date/mouse position and position the circle x/y
 		  var idx = d3.bisector(d => d.date).left(d.values, xDate);
-		  if (d.values[idx] == null) return "translate(-500,-500)";
+		  if (!isFinite(idx)) console.log("idx: " + idx);
+		  if (!isFinite(logY(d.values[idx].pct_value))) console.log("log: series=" + d.values[idx].series + " idx=" + idx + "pct=" + d.values[idx].pct_value + " log=" + logY(d.values[idx].pct_value));
+		  if (d.values[idx] == null || !isFinite(idx)) return "translate(-500,-500)";
 		  return "translate(" + x(d.values[idx].date) + "," + logY(d.values[idx].pct_value).toFixed(0) + ")";
 		}); // end attr statement
 		
