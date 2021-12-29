@@ -71,6 +71,8 @@ var x, xAxis;
 var sumstat;
 var uniqueSeries;
 
+var stateNameLookup;
+
 	
 // date parser function
 var parseDate = d3.timeParse("%Y/%m/%d");
@@ -212,7 +214,7 @@ function loadPage(error, vd) {
 	
 	// clean the state population info
 	let popLookup = {};
-	let stateNameLookup = {"None":"XX"};
+	stateNameLookup = {"None":"XX"};
 	statePop.forEach(d => {
 		d.population = d.population.replace(/,/g,""); // strip out any commas
 		popLookup[d.state] = parseInt(d.population);
@@ -488,7 +490,6 @@ function update() {
 	
 	let dataLowerLimit = new Date(startDate.getFullYear(),startDate.getMonth(),startDate.getDate()-7);
 	data = data.filter(function(d,i){ return statesSelected.indexOf(d.state) >= 0 && d.date >= dataLowerLimit; });
-	console.log("post size: " + data.length);
 	
 	// IMPORTANT: make sure we're still sorted by date, else the lines will scribble all over in the wrong order!
 	data.sort((a, b) => (a.date > b.date) ? 1 : -1);
@@ -505,38 +506,27 @@ function update() {
 		maDays = 7;
 		seriesData = data.filter(d => d.series == series);
 		seriesData.sort((a, b) => (a.date > b.date) ? 1 : -1);
-		//console.log(series + ": " + seriesData.length);
-		seriesData[0].deaths_covid_rollsum = seriesData[0].deaths_covid;
 		seriesData[0].ip_covid_rollsum = seriesData[0].ip_covid;
-		seriesData[0].deaths_covid_100k_rollsum = seriesData[0].deaths_covid_100k;
 		seriesData[0].ip_covid_100k_rollsum = seriesData[0].ip_covid_100k;
 		for (var i = 1 ; i < seriesData.length ; i++) {
-			seriesData[i].deaths_covid_rollsum = seriesData[i-1].deaths_covid_rollsum + seriesData[i].deaths_covid;
 			seriesData[i].ip_covid_rollsum = seriesData[i-1].ip_covid_rollsum + seriesData[i].ip_covid;
-			
-			seriesData[i].deaths_covid_100k_rollsum = seriesData[i-1].deaths_covid_100k_rollsum + seriesData[i].deaths_covid_100k;
 			seriesData[i].ip_covid_100k_rollsum = seriesData[i-1].ip_covid_100k_rollsum + seriesData[i].ip_covid_100k;
 		}
 		for (var i = 0 ; i < seriesData.length ; i++) {
 			if (i<maDays) {
-				seriesData[i].deaths_covid_ma = 0;
 				seriesData[i].ip_covid_ma = 0;
-				seriesData[i].deaths_covid_100k_ma = 0;
 				seriesData[i].ip_covid_100k_ma = 0;
 			}
 			else {
-				seriesData[i].deaths_covid_ma = (seriesData[i].deaths_covid_rollsum-seriesData[i-maDays].deaths_covid_rollsum)/maDays;
 				seriesData[i].ip_covid_ma = (seriesData[i].ip_covid_rollsum-seriesData[i-maDays].ip_covid_rollsum)/maDays;
-				seriesData[i].deaths_covid_100k_ma = (seriesData[i].deaths_covid_100k_rollsum-seriesData[i-maDays].deaths_covid_100k_rollsum)/maDays;
 				seriesData[i].ip_covid_100k_ma = (seriesData[i].ip_covid_100k_rollsum-seriesData[i-maDays].ip_covid_100k_rollsum)/maDays;
 			}
-			//data[i].deaths_covid_rollsum = data[i-1].deaths_covid_rollsum + data[i].deaths_covid;
 		}
 		
 		// clean data - track last good death # for each state
 		lastGoodDeathCt = {};
 		
-		// now that the moving averages are calculate, do the pct change
+		// now that the moving averages are calculated, do the pct change
 		seriesData.forEach(d => {
 			if (d.prior == null) return;
 			if (d.prior.cases_ma != 0){
@@ -567,7 +557,7 @@ function update() {
 
 // Draws the standard chart
 function updateStandard(data){
-  // group the data: I want to draw one line per group
+  // group the data: want to draw one line per group
   sumstat = d3.nest() // nest function allows to group the calculation per level of a factor
 	.key(function(d) { return d.series;})
     .entries(data);
@@ -1037,6 +1027,7 @@ function updatePct(data){
 		.attr("transform", (d, i) => {
 		  // find index in the data corresponding to the date/mouse position and position the circle x/y
 		  var idx = d3.bisector(d => d.date).left(d.values, xDate);
+		  if (d.values[idx] == null) return "translate(-500,-500)";
 		  return "translate(" + x(d.values[idx].date) + "," + logY(d.values[idx].pct_value).toFixed(0) + ")";
 		}); // end attr statement
 		
@@ -1060,12 +1051,14 @@ function updateTooltipContentPct(mouse) {
 	sortingObj = []
 	nestedData.map(d => {
 	  var idx = d3.bisector(d => d.date).left(d.values, xDate);
+	  if (d.values[idx] != null){
 	  sortingObj.push(
 		{	
 			key: d.values[idx].pct_series, 
 			num: d.values[idx].pct_value,
 			date: d.values[idx].date
 		})
+	  }
 	}) // close map()
 
 	// sort them by key, descending
@@ -1085,6 +1078,8 @@ function updateTooltipContentPct(mouse) {
 	// tooltip box text
 
 	var ttLabels = ["Cases","Hosp","Deaths"];
+
+	if (sortingObj[0] == null) return;
 	
 	// date at the top and box position
 	let localDate = sortingObj[0].date.toLocaleDateString('en-us', { year:"numeric", month:"short", day:"numeric"});
@@ -1167,16 +1162,71 @@ function makeAllSortable(parent) {
 /////////////////////////////////////////////////////////////////////////////////
 // Table manipulation
 
-tblData = [
-	["CT",5,"-5%",5,"-5%",5,"5%"],
-	["NY",6,"7%",8,"-9%",10,"11%"]
-];
+// table with summary by state
+tblData = [];
+
+function tablePctValue(value){
+	if (value > 1) return "+" + (100*(value-1)).toFixed(0) + "%";
+	else if (value == 1) return "Unchanged";
+	else return "-" + (Math.abs(value-1)*100).toFixed(0) + "%";
+}
+
+// compute a moving average
+function movingAverage(dataSet, col, dt, days){
+	let oneDay = 1000 * 3600 * 24;
+	let dtOne = new Date(dt.getTime()-days*oneDay);
+	
+	// filter to date range and sort
+	dataSet = dataSet.filter(d=>d.date<dt && d.date>=dtOne);
+	//dataSet.sort((a, b) => (a.date > b.date) ? 1 : -1);
+		
+	//let sum = dataSet.reduce((a, b) => a + (b[col] || 0), 0);
+	let sum = d3.sum(dataSet, d => d[col]);
+	return sum / days;
+}
+
+// gather the data for a given state
+function prepareTableStateData(stateName,stateAbbr){
+	//console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
+
+	st = hhsData.filter(d => d.state == stateAbbr);
+	lastDay = st[st.length-1];
+	oneYearAgo = st[st.length-366];
+	console.log("last day:" + lastDay.date + " year ago=" + oneYearAgo.date);
+
+	// moving avg for 1 year ago
+	oldCases = oneYearAgo.cases_100k_ma;
+	hosp = movingAverage(st, "ip_covid_100k", lastDay.date, 7);
+	oldHosp = movingAverage(st, "ip_covid_100k", oneYearAgo.date, 7);
+	oldDeaths = oneYearAgo.deaths_100k_ma;
+
+	tbl = [];
+	tbl[0] = stateName;
+	tbl[1] = lastDay.cases_100k_ma.toFixed(1);
+	tbl[2] = oldCases == 0 ? "Infinite (previous value=0)" : tablePctValue(lastDay.cases_100k_ma/oldCases);
+	tbl[3] = hosp.toFixed(1);
+	tbl[4] = oldHosp == 0 ? "Infinite (previous value=0)" : tablePctValue(hosp/oldHosp);
+	tbl[5] = lastDay.deaths_100k_ma;
+	tbl[6] = oldDeaths == 0 ? "Infinite (previous value=0)" : tablePctValue(lastDay.deaths_100k_ma/oldDeaths);
+	tbl[7] = lastDay.vaccine_pct + "%";
+	tblData.push(tbl);
+}
+
+function prepareTableData(){
+	let keys = Object.keys(stateNameLookup);
+	keys.forEach(d => {
+		if (d != "None"){
+			prepareTableStateData(d,stateNameLookup[d]);
+		}
+	});
+}
 
 function createTable(){
 	var table = document.getElementById('data-table'),
 		tbody = table.getElementsByTagName('tbody')[0],
 		clone = tbody.rows[0].cloneNode(true);
 
+	prepareTableData();
 	let row = tbody.rows[0];
 	for (i=0; i<tblData.length; i++){
 		rowData = tblData[i];
@@ -1191,29 +1241,5 @@ function createTable(){
 		}
 		tbody.appendChild(row);
 	}
-}
-
-function deleteRow(el) {
-    var i = el.parentNode.parentNode.rowIndex;
-    table.deleteRow(i);
-    while (table.rows[i]) {
-        updateRow(table.rows[i], i, false);
-        i++;
-    }
-}
-
-function insRow() {
-		var table = document.getElementById('data-table'),
-		tbody = table.getElementsByTagName('tbody')[0],
-		clone = tbody.rows[0].cloneNode(true);
-
-
-    var new_row = updateRow(clone.cloneNode(true), ++tbody.rows.length, true);
-    tbody.appendChild(new_row);
-}
-
-function updateRow(row, i, reset) {
-    row.cells[0].innerHTML = i;
-
-    return row;
+	sortTable(table,0,-1); // start sorted by state alphabetically
 }

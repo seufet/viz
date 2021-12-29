@@ -108,8 +108,18 @@
 	  margin-top: 10px;
 	  padding-left: 10px;
 	  font-weight: bold;
-	  font-size: 20px;
+	  font-size: 24px;
 	  text-align: center;
+	}
+	#table-title {
+	  width: 90%;
+	  height: 20px;
+	  margin-left: 10px;
+	  margin-top: 10px;
+	  margin-bottom: 10px;
+	  font-weight: bold;
+	  font-size: 24px;
+	  text-align: left;
 	}
 	#foot {
 	  width: 90%;
@@ -157,7 +167,7 @@ tbody tr:nth-child(even) {
 
 thead th, tfoot th, tfoot td {
   border: 0px solid black;
-  width: 10%;
+  width: 15%;
 }
 tbody tr {
   
@@ -173,12 +183,14 @@ tbody tr {
 table {
   background-color: white;
   border: 2px solid black;  
+  width: 100%;
 }
 
 #data-table-div {
 	margin-left: 50px;
 	margin-top: 50px;
-	display: none;
+	display: block;
+	width: 90%
 }
 
 	</style>
@@ -229,16 +241,18 @@ By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.or
 </div>
 
 <div id="data-table-div" display="none">
+<div id="table-title">Statistics by US State</div>
 	<table id="data-table">
 		<thead>
 			<tr>
 			  <th>State</th>
-			  <th>Cases</th>
+			  <th>Cases<br>Per 100k</th>
 			  <th>1 Yr Change</th>
-			  <th>Hospitalized</th>
+			  <th>Hospitalized<br>Per 100k</th>
 			  <th>1 Yr Change</th>
-			  <th>Deaths</th>
+			  <th>Deaths<br>Per 100k</th>
 			  <th>1 Yr Change</th>
+			  <th>Vaccinated</th>
 			</tr>
 		  </thead>
 		  <tbody id="data-table-body">
@@ -250,6 +264,7 @@ By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.or
 			  <td>-20%</td>
 			  <td>10</td>
 			  <td>-50%</td>
+			  <td>50%</td>
 			</tr>
 		  </tbody>
 	</table>
