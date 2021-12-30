@@ -548,6 +548,9 @@ function update() {
 			else d.change_deaths_ma = 1;	
 		});	
 	});
+	
+	// remove our equality line
+	svg.selectAll(".equalityLine").remove();
 
 	if (groupSelected == "pctChange") {
 		updatePct(data);
@@ -905,6 +908,16 @@ function updatePct(data){
 			
 		}));
 		
+	// draw a "no change" line
+	svg.append("line")
+	  .attr("class","equalityLine")
+		.attr("x1", (d,i) => 0)
+		.attr("x2", (d,i) => width)
+		.attr("y1", (d,i) => logY(1))
+		.attr("y2", (d,i) => logY(1))
+		.attr("stroke", d => "gray")
+		.style("stroke-width", 2);		
+		
 	svg.selectAll(".myXAxis").remove();
   x = d3.scaleTime()
     .domain(d3.extent(data, function(d) { return d.date; }))
@@ -1052,8 +1065,8 @@ function updatePct(data){
 		.attr("transform", (d, i) => {
 		  // find index in the data corresponding to the date/mouse position and position the circle x/y
 		  var idx = d3.bisector(d => d.date).left(d.values, xDate);
-		  if (!isFinite(idx)) console.log("idx: " + idx);
-		  if (!isFinite(logY(d.values[idx].pct_value))) console.log("log: series=" + d.values[idx].series + " idx=" + idx + "pct=" + d.values[idx].pct_value + " log=" + logY(d.values[idx].pct_value));
+		  //if (!isFinite(idx)) console.log("idx: " + idx);
+		  //if (!isFinite(logY(d.values[idx].pct_value))) console.log("log: series=" + d.values[idx].series + " idx=" + idx + "pct=" + d.values[idx].pct_value + " log=" + logY(d.values[idx].pct_value));
 		  if (d.values[idx] == null || !isFinite(idx)) return "translate(-500,-500)";
 		  return "translate(" + x(d.values[idx].date) + "," + logY(d.values[idx].pct_value).toFixed(0) + ")";
 		}); // end attr statement
