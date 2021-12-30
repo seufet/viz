@@ -44,8 +44,10 @@
 // GLOBALS
 
 // title prefix
-var titlePrefix = "Pandemic Comparison by Year: ";
+var titlePrefix = "Comparison by Year: ";
 var lastSeriesLength = 0;
+
+
 
 // set the dimensions and margins of the graph
 var margin = {top: 10, right: 30, bottom: 30, left: 60},
@@ -94,6 +96,13 @@ var groups = {
 	deaths_100k_ma : "Covid Deaths (per 100k)"
 };
 
+var explanationPct = "<b>Explanation: </b>The chart below shows the percentage change compared to the <i>same day one year earlier</i>. Where the plot is " +
+	"above the horizontal Equality line, numbers have gone up compared to the prior year. Where the plot is below Equality, numbers have gone down. " +
+	"To improve viewing, a logarithmic scale is used.";
+var explanationStd = "<b>Explanation: </b> The solid lines show data from the most recent year. Dashed lines show data from one year earlier. " +
+	"Note that the dashed lines may extend further right than the solid ones. This permits seeing last year's trends for the coming months, which is "+
+	"helpful to visualize the (potential) road ahead based on prior seasonal patterns.";
+
 var decimals = {
 	cases_ma : 0,
 	cases_100k_ma : 0,
@@ -121,7 +130,7 @@ var defaultStartDate = "2021/07/01";
 var defaultNumMonths = 8;
 var defaultData = "pctChange";
 var endDate = new Date();
-var paletteStr = "black,blue,brown,gray,red";
+var paletteStr = "blue,red,black,brown,lightgreen";
 
 var startDate;
 var numMonthsSel;
@@ -561,6 +570,9 @@ function update() {
 
 // Draws the standard chart
 function updateStandard(data){
+	exp = document.getElementById("explanation");
+	exp.innerHTML = explanationStd;
+	
   // group the data: want to draw one line per group
   sumstat = d3.nest() // nest function allows to group the calculation per level of a factor
 	.key(function(d) { return d.series;})
@@ -830,9 +842,11 @@ var legendLabels = ["Cases % Chg","Hosp % Chg","Deaths % Chg"];
 	
 // Draws the pctChange chart
 function updatePct(data){
-	
 	console.log("pctChange update");
-  // group the data: for each state, separate lines for cases, hosp, death
+	exp = document.getElementById("explanation");
+	exp.innerHTML = explanationPct;
+	
+	// group the data: for each state, separate lines for cases, hosp, death
   
   // concat data for grouping
   // restrict to date range/year 2 surge, then have series for case, hosp, death
@@ -901,7 +915,7 @@ function updatePct(data){
 			if (d>1) {
 				return "+" + (100*(d-1)).toFixed(0) + "%";
 			} else if (d==1) {
-					return "No Change";
+					return "Equality";
 			} else {
 				return "-" + (100*(1-d)).toFixed(0) + "%";
 			}

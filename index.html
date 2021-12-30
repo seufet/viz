@@ -58,6 +58,16 @@
 		padding-bottom: 5px;
 		padding-left: 60px;
 	}
+	#explanation {
+		float: left;
+		display: block;
+		width: 90%;
+		font-size: 18px;
+		margin-top: -12px;
+		margin-left: 0px;
+		margin-bottom: 10px;
+		padding-left: 10px;
+	}
 	#selectButton {
 		height: 30px;
 		margin-right: 20px;
@@ -93,13 +103,14 @@
 	}
 	#controls {
 	  width: 90%;
-	  height: 100px;
+	  height: auto;
 	  border: 2px solid #000000;
 	  margin-left: 40px;
 	  margin-top: 10px;
 	  padding-left: 10px;
 	  padding-bottom: 5px;
 	  padding-top: 10px;
+	  overflow: auto;
 	}
 	#chart-title {
 	  width: 90%;
@@ -230,7 +241,8 @@ By Tom Seufert, MD - tseufert@challiance.org - <a href="http://www.rarelyread.or
 	<select id="state3" class="stateButton"></select>
 	<select id="state4" class="stateButton"></select>
 	<select id="state5" class="stateButton"></select>
-</span>
+</span><br>
+<div id="explanation"></div>
 </div>
 
 <!-- Create a div where the graph will take place -->
