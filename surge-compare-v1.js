@@ -98,10 +98,10 @@ var groups = {
 
 var explanationPct = "<b>Explanation: </b>The chart below shows the percentage change compared to the <i>same day one year earlier</i>. Where the plot is " +
 	"above the horizontal Equality line, numbers have gone up compared to the prior year. Where the plot is below Equality, numbers have gone down. " +
-	"To improve viewing, a logarithmic scale is used.";
+	"To improve viewing, a logarithmic scale is used. <a href=\"https://rarelyread.medium.com/seasons-of-covid-in-charts-e0757ff4afb1\">More Information</a>";
 var explanationStd = "<b>Explanation: </b> The solid lines show data from the most recent year. Dashed lines show data from one year earlier. " +
 	"Note that the dashed lines may extend further right than the solid ones. This permits seeing last year's trends for the coming months, which is "+
-	"helpful to visualize the (potential) road ahead based on prior seasonal patterns.";
+	"helpful to visualize the (potential) road ahead based on prior seasonal patterns. <a href=\"https://rarelyread.medium.com/seasons-of-covid-in-charts-e0757ff4afb1\">More Information</a>";
 
 var decimals = {
 	cases_ma : 0,
