@@ -107,9 +107,21 @@ var regionUS = {
 		"NC","ND","NE","NH","NJ","NM","NV","NY","OH","OK","OR","PA","PR","RI","SC","SD","TN","TX","UT","VA","VT","WA","WI","WV","WY"]	
 };
 var regionNewEngland = {
-	abbr: "EN", name: "New England", states: ["CT","MA","ME","NH","RI","VT"]	
+	abbr: "New-Eng", name: "US - New England", states: ["CT","MA","ME","NH","RI","VT"]	
 };
-var customRegions = [regionUS,regionNewEngland];
+var regionUSWest = {
+	abbr: "West", name: "US - West", states: ["AZ","CO","ID","MT","NV","NM","UT","WY","AK","CA","HI","OR","WA"]	
+};
+var regionUSMidwest = {
+	abbr: "Midwest", name: "US - Midwest", states: ["IL","IN","MI","OH","WI","IA","KS","MN","MO","NE","ND","SD"]	
+};
+var regionUSNortheast = {
+	abbr: "Northeast", name: "US - Northeast", states: ["CT","MA","ME","NH","RI","VT","NY","NJ","PA"]	
+};
+var regionUSSouth = {
+	abbr: "South", name: "US - South", states: ["DE","FL","GA","MD","NC","SC","VA","DC","WV","AL","KY","MS","TN","AR","LA","OK","TX"]	
+};
+var customRegions = [regionUS,regionNewEngland,regionUSWest,regionUSMidwest,regionUSNortheast,regionUSSouth];
 
 var explanationPct = "<b>Explanation: </b>The chart below shows the percentage change compared to the <i>same day one year earlier</i>. Where the plot is " +
 	"above the horizontal Equality line, numbers have gone up compared to the prior year. Where the plot is below Equality, numbers have gone down. " +
@@ -799,7 +811,8 @@ function updateStandard(data){
   mousePerLine.append("circle")
 	.attr("r", 4)
 	.style("stroke", d => {
-		return colorByState(d.key.substring(0,2));
+		//return colorByState(d.key.substring(0,2));
+		return colorByState(d.key.split(",")[0]);
 	})
 	.style("fill", "none")
 	.style("stroke-width", "2px")
@@ -880,7 +893,9 @@ function updateStandard(data){
 				(d.values)
 		})
 	  .attr("fill", "none")
-	  .attr("stroke", d => colorByState(d.key.substring(0,2)))
+	  //.attr("stroke", d => colorByState(d.key.substring(0,2)))
+	  .attr("stroke", d => colorByState(d.key.split(",")[0]))
+	  
 	  .style("stroke-width", 2)
 	  // Year 2 not dashed, Year 1 dashed
 		.style("stroke-dasharray", (d) => d.key.endsWith("Year 2") ? "3,0" : "3,3" )
@@ -889,7 +904,8 @@ function updateStandard(data){
 	// Add a short line in the legend for each entry.
 	console.log("UNIQUE SERIES: " + uniqueSeries);
 	var lineLength = 20;
-	var totalLength = 120;
+	var totalLength = 140;
+	var legendXStart = 30;
 	svg.selectAll(".legendLines").remove();
 	legendLines = svg.selectAll(".legendLines").data(uniqueSeries);
 	legendLines
@@ -897,12 +913,13 @@ function updateStandard(data){
 	  .append("line")
 	  .merge(legendLines)
 		.attr("class","legendLines")
-		.attr("x1", (d,i) => i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2)
-		.attr("x2", (d,i) => lineLength+(i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2))
+		.attr("x1", (d,i) => i%2==0?legendXStart+totalLength*i/2:legendXStart+totalLength*(i-1)/2)
+		.attr("x2", (d,i) => lineLength+(i%2==0?legendXStart+totalLength*i/2:legendXStart+totalLength*(i-1)/2))
 		.attr("y1", d => d.endsWith("Year 1") ? height-40 : height-25)
 		.attr("y2", d => d.endsWith("Year 1") ? height-40 : height-25)
 		//.style("stroke", d => stateColors[d.substring(0,2)])
-		.attr("stroke", d => colorByState(d.substring(0,2)))
+		//.attr("stroke", d => colorByState(d.substring(0,2))) 
+		.attr("stroke", d => colorByState(d.key.split(",")[0]))
 		.style("stroke-width", 2)
 		.style("stroke-dasharray", (d) => d.endsWith("Year 2") ? "3,0" : "3,3" )
 
@@ -915,9 +932,10 @@ function updateStandard(data){
 	  .append("text")
 		.merge(legendText)
 		.attr("class","legendText")
-		.attr("x", (d,i) => 5+lineLength+(i%2==0?50+totalLength*i/2:50+totalLength*(i-1)/2))
+		.attr("x", (d,i) => 5+lineLength+(i%2==0?legendXStart+totalLength*i/2:legendXStart+totalLength*(i-1)/2))
 		.attr("y", d => d.endsWith("Year 1") ? height-39 : height-24)
-		.style("fill", d => colorByState(d.substring(0,2)))
+		//.style("fill", d => colorByState(d.substring(0,2)))
+		.style("fill", d => colorByState(d.key.split(",")[0]))
 		.style("font", "12px times")
 		.text(d => d) // text is the series name
 		.attr("text-anchor", "left")
@@ -1128,7 +1146,9 @@ function updatePct(data){
 				(d.values)
 		})
 	  .attr("fill", "none")
-	  .attr("stroke", d => colorByState(d.key.substring(0,2)))
+	  //.attr("stroke", d => colorByState(d.key.substring(0,2)))
+	  .attr("stroke", d => colorByState(d.key.split(",")[0]))
+	  
 	  .style("stroke-width", 2)
 	  // Year 2 not dashed, Year 1 dashed
 		.style("stroke-dasharray", d => {
@@ -1143,7 +1163,8 @@ function updatePct(data){
 	console.log("SERIES:" + pctSeries);
 	
 	var lineLength = 20;
-	var totalLength = 130;
+	var totalLength = 140;
+	var legendXStart = 30;
 	svg.selectAll(".legendLines").remove();
 	legendLines = svg.selectAll(".legendLines").data(pctSeries);
 	legendLines
@@ -1151,11 +1172,12 @@ function updatePct(data){
 	  .append("line")
 	  .merge(legendLines)
 		.attr("class","legendLines")
-		.attr("x1", (d,i) => 50+totalLength*Math.floor(i/3))
-		.attr("x2", (d,i) => lineLength+50+totalLength*Math.floor(i/3))
+		.attr("x1", (d,i) => legendXStart+totalLength*Math.floor(i/3))
+		.attr("x2", (d,i) => lineLength+legendXStart+totalLength*Math.floor(i/3))
 		.attr("y1", (d,i) => height-40+15*(i%3))
 		.attr("y2", (d,i) => height-40+15*(i%3))
-		.attr("stroke", d => colorByState(d.substring(0,2)))
+		//.attr("stroke", d => colorByState(d.substring(0,2))) 
+		.attr("stroke", d => colorByState(d.split(",")[0]))
 		.style("stroke-width", 2)
 		.style("stroke-dasharray", (d,i) => dashPatterns[i%3])
 	
@@ -1168,11 +1190,11 @@ function updatePct(data){
 	  .append("text")
 		.merge(legendText)
 		.attr("class","legendText")
-		.attr("x", (d,i) => 5+lineLength+50+totalLength*Math.floor(i/3))
+		.attr("x", (d,i) => 5+lineLength+legendXStart+totalLength*Math.floor(i/3))
 		.attr("y", (d,i) => height-39+15*(i%3))
-		.style("fill", d => colorByState(d.substring(0,2)))
+		.style("fill", d => colorByState(d.split(",")[0]))
 		.style("font", "12px times")
-		.text((d,i) => d.substring(0,2)+" "+legendLabels[i%3])
+		.text((d,i) => d.split(",")[0]+" "+legendLabels[i%3])
 		.attr("text-anchor", "left")
 		.style("alignment-baseline", "middle")
 
@@ -1201,7 +1223,7 @@ function updatePct(data){
   mousePerLine.append("circle")
 	.attr("r", 4)
 	.style("stroke", d => {
-		return colorByState(d.key.substring(0,2));
+		return colorByState(d.key.split(",")[0]);
 	})
 	.style("fill", "none")
 	.style("stroke-width", "2px")
@@ -1405,7 +1427,7 @@ function movingAverage(dataSet, col, dt, days){
 
 // gather the data for a given state
 function prepareTableStateData(stateName,stateAbbr){
-	//console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
+	console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
 
 	//if (stateAbbr == "US" || stateAbbr == "EN") return;
 
