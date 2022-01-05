@@ -211,13 +211,13 @@ function elementValue(id) {
 
 // add a custom region
 function applyCustomRegion(data, region) {
-	console.log("Custom region: " + region.name + " with " + region.states.length + " states.");
+	//console.log("Custom region: " + region.name + " with " + region.states.length + " states.");
 	
 	let regionPop = 0.0;
 	region.states.forEach(d => regionPop += popLookup[d]);
 	popLookup[region.abbr] = regionPop;
 	region.population = regionPop;
-	console.log("Custom region pop: " + regionPop);
+	//console.log("Custom region pop: " + regionPop);
 	stateNameLookup[region.name] = region.abbr;
 	
 	data = data.filter(d => d.surge == "Year 2" && region.states.includes(d.state) && d.date.getTime()>parseDate("2020/04/01").getTime());
@@ -256,7 +256,7 @@ function applyCustomRegion(data, region) {
 				nextRow.vaccinated += (d.vaccine_pct * d.population / 100.0);
 		//}
 	});
-	console.log("Region " + region.name + " built with " + regionRows.length);
+	//console.log("Region " + region.name + " built with " + regionRows.length);
 	
 	regionRows.forEach(d => {
 		d.cases_100k_ma = 100000*d.cases_ma/regionPop;
@@ -267,8 +267,8 @@ function applyCustomRegion(data, region) {
 	});
 	
 	let finalRow = regionRows[regionRows.length-1]; //regionRows.length-1
-	console.log(region.name + " cases=" + finalRow.cases_100k_ma + " ip=" + finalRow.ip_covid_100k + " deaths=" + finalRow.deaths_100k_ma);
-	console.log(region.name + " cases=" + finalRow.cases_ma + " ip=" + finalRow.ip_covid + " deaths=" + finalRow.deaths_ma);
+	//console.log(region.name + " cases=" + finalRow.cases_100k_ma + " ip=" + finalRow.ip_covid_100k + " deaths=" + finalRow.deaths_100k_ma);
+	//console.log(region.name + " cases=" + finalRow.cases_ma + " ip=" + finalRow.ip_covid + " deaths=" + finalRow.deaths_ma);
 	
 	return regionRows;
 	
@@ -484,13 +484,13 @@ function loadPage(error, vd) {
 		d.pk = d.series + "-" + d.date.getTime();
 		hhsLookup[d.pk] = d;
 	});
-	console.log("vaccine good: " + vaccineGood + " - vaccineBad: " + vaccineBad);
+	//console.log("vaccine good: " + vaccineGood + " - vaccineBad: " + vaccineBad);
 
 	// Then add aggregations for US, regions here
-	console.log("length before custom regions: " + masterData.length);
+	//console.log("length before custom regions: " + masterData.length);
 	customRegions.forEach(d => {
 		masterData = masterData.concat(applyCustomRegion(masterData, d));
-		console.log("length after custom region: " + d.name + " = " + masterData.length);
+		//console.log("length after custom region: " + d.name + " = " + masterData.length);
 	});
 
 
@@ -540,7 +540,7 @@ function loadPage(error, vd) {
 	let startDateAgo = 1;//Math.floor((today.getTime()-startDate.getTime())/oneDay);
 	let daysAdd = 90;//numMonthsSel*30-startDateAgo;
 	
-	console.log("Start date days ago: " + startDateAgo + " - daysAdd=" + daysAdd);
+	//console.log("Start date days ago: " + startDateAgo + " - daysAdd=" + daysAdd);
 	let oneYearAgo = new Date(today.getFullYear()-1,today.getMonth(),today.getDate());
 	let peekData = masterData.filter(d => {
 		daysDiff = Math.floor((d.date.getTime()-oneYearAgo.getTime())/oneDay);
@@ -563,10 +563,10 @@ function loadPage(error, vd) {
 		}
 	});
 	
-	console.log("orig masterData size: " + masterData.length);
-	console.log("priorYear size: " + priorYear.length);
+	//console.log("orig masterData size: " + masterData.length);
+	//console.log("priorYear size: " + priorYear.length);
 	masterData = masterData.concat(priorYear);
-	console.log("combined data size: " + masterData.length);
+	//console.log("combined data size: " + masterData.length);
 	
 	//////////////////////////////////////////////////////////////////////////////////	
 	// Compute 7-day moving averages for hospitalizations
@@ -584,7 +584,7 @@ function loadPage(error, vd) {
 		seriesData[0].ip_covid_rollsum = seriesData[0].ip_covid;
 		seriesData[0].ip_covid_100k_rollsum = seriesData[0].ip_covid_100k;
 
-		if (series.substring(0,2) == "MA") console.log(JSON.stringify(seriesData[0]));
+		//if (series.substring(0,2) == "MA") console.log(JSON.stringify(seriesData[0]));
 		for (var i = 1 ; i < seriesData.length ; i++) {
 			seriesData[i].ip_covid_rollsum = seriesData[i-1].ip_covid_rollsum + seriesData[i].ip_covid;
 			seriesData[i].ip_covid_100k_rollsum = seriesData[i-1].ip_covid_100k_rollsum + seriesData[i].ip_covid_100k;
@@ -715,7 +715,7 @@ function update() {
 	numMonthsSel = parseInt(elementValue("monthsButton"));
 	startDate = parseDate(elementValue("startDateButton"));
 	let endDate = new Date(startDate.getTime()+oneDay*30*numMonthsSel);
-	console.log("Start Date:" + startDate + " Months:" + numMonthsSel + " End Date=" + endDate);
+	//console.log("Start Date:" + startDate + " Months:" + numMonthsSel + " End Date=" + endDate);
 	
 	// start with only selected states to ease processing/memory
 	var data = masterData.filter(d => statesSelected.includes(d.state) &&
@@ -724,7 +724,7 @@ function update() {
 	// update the unique series
 	uniqueSeries = Array.from(new Set(data.map(d => d.series)));
 	uniqueSeries.sort();
-	console.log(uniqueSeries);
+	//console.log(uniqueSeries);
 
 	// state palette
 	colorByState = d3.scaleOrdinal()
@@ -845,24 +845,20 @@ function updateStandard(data){
 		var mouse = d3.mouse(this);  
 		var xDate = x.invert(mouse[0]); // get date corresponding to mouse x position
 		
-		if (groupSelected == "pctChange"){
-				console.log("pctChange mouse move");
-		} else {
-			// move the circles that highlight each point
-			d3.selectAll(".mouse-per-line")
-			.attr("transform", (d, i) => {
-				//console.log("transform: " + d.date + " i=" + i);
-				// find index in the data corresponding to the date/mouse position and position the circle x/y
-				var idx = d3.bisector(d => d.date).left(d.values, xDate);
-				
-				if (d.values[idx] == null) return "translate(-500,-500)";
-				return "translate(" + x(d.values[idx].date) + "," + y(d.values[idx][groupSelected]) + ")";
-			}); // end attr statement
+		// move the circles that highlight each point
+		d3.selectAll(".mouse-per-line")
+		.attr("transform", (d, i) => {
+			//console.log("transform: " + d.date + " i=" + i);
+			// find index in the data corresponding to the date/mouse position and position the circle x/y
+			var idx = d3.bisector(d => d.date).left(d.values, xDate);
 			
-			// move the vertical line
-			d3.select(".mouse-line")
-				.attr("d", () => ("M" + x(xDate) + "," + (chartHeight-15) + " " + x(xDate) + "," + 0));
-		}
+			if (d.values[idx] == null) return "translate(-500,-500)";
+			return "translate(" + x(d.values[idx].date) + "," + y(d.values[idx][groupSelected]) + ")";
+		}); // end attr statement
+		
+		// move the vertical line
+		d3.select(".mouse-line")
+			.attr("d", () => ("M" + x(xDate) + "," + (chartHeight-15) + " " + x(xDate) + "," + 0));
 		
 		// update the text in the box
 		updateTooltipContent(mouse);
@@ -919,7 +915,7 @@ function updateStandard(data){
 		.attr("y2", d => d.endsWith("Year 1") ? height-40 : height-25)
 		//.style("stroke", d => stateColors[d.substring(0,2)])
 		//.attr("stroke", d => colorByState(d.substring(0,2))) 
-		.attr("stroke", d => colorByState(d.key.split(",")[0]))
+		.attr("stroke", d => colorByState(d.split(",")[0]))
 		.style("stroke-width", 2)
 		.style("stroke-dasharray", (d) => d.endsWith("Year 2") ? "3,0" : "3,3" )
 
@@ -935,7 +931,7 @@ function updateStandard(data){
 		.attr("x", (d,i) => 5+lineLength+(i%2==0?legendXStart+totalLength*i/2:legendXStart+totalLength*(i-1)/2))
 		.attr("y", d => d.endsWith("Year 1") ? height-39 : height-24)
 		//.style("fill", d => colorByState(d.substring(0,2)))
-		.style("fill", d => colorByState(d.key.split(",")[0]))
+		.style("fill", d => colorByState(d.split(",")[0]))
 		.style("font", "12px times")
 		.text(d => d) // text is the series name
 		.attr("text-anchor", "left")
@@ -1137,7 +1133,7 @@ function updatePct(data){
 		.transition()
 		.duration(1000)
 		.attr("d", function(d){
-			console.log("d function: " + d.key + " values=" + d.values.length);
+			//console.log("d function: " + d.key + " values=" + d.values.length);
 			return d3.line()
 				// this clips the lines so they won't go beyond the axis limit!
 				.defined(d => d.date >= startDate)
@@ -1427,7 +1423,7 @@ function movingAverage(dataSet, col, dt, days){
 
 // gather the data for a given state
 function prepareTableStateData(stateName,stateAbbr){
-	console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
+	//console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
 
 	//if (stateAbbr == "US" || stateAbbr == "EN") return;
 
@@ -1442,7 +1438,7 @@ function prepareTableStateData(stateName,stateAbbr){
 		!isFinite(st[idx].vaccine_pct)) idx--; // find last day with all data present
 	lastDay = st[idx];
 	oneYearAgo = st[idx-365];
-	console.log("last day:" + lastDay.date + " year ago=" + oneYearAgo.date);
+	//console.log("last day:" + lastDay.date + " year ago=" + oneYearAgo.date);
 
 	// moving avg for 1 year ago
 	oldCases = oneYearAgo.cases_100k_ma;
@@ -1461,67 +1457,6 @@ function prepareTableStateData(stateName,stateAbbr){
 	tbl[7] = lastDay.vaccine_pct.toFixed(1) + "%";
 	tblData.push(tbl);
 }
-
-// gather the data for the whole US, push as the first row in the state summary table
-function prepareTableUSData(){
-	let usPop = d3.sum(Object.values(popLookup));
-	
-	data = masterData.filter(d => d.surge == "Year 2");
-	data.sort((a, b) => (a.date > b.date) ? 1 : -1);
-	
-	st = data.filter(d => d.state == "MA" && d.surge == "Year 2");
-	st.sort((a, b) => (a.date > b.date) ? 1 : -1);
-	
-	idx = st.length-1;
-	while (st[idx].cases_100k_ma == null || 
-		st[idx].ip_covid == null ||
-		st[idx].vaccine_pct == null) idx--; // find last day with all data present
-	lastDate = st[idx].date;
-	//console.log("US table last date:" + lastDate);
-	
-	oneYearAgoDate = new Date(lastDate.getFullYear()-1,lastDate.getMonth(),lastDate.getDate());
-	lastDay = data.filter(d => d.date.getTime() == lastDate.getTime());
-	oneYearAgo = data.filter(d => d.date.getTime() == oneYearAgoDate.getTime());
-	
-	console.log("US table last day:" + lastDate + " year ago=" + oneYearAgoDate);
-	console.log("US Records=" + data.length + " last day records:" + lastDay.length + " year ago=" + oneYearAgo.length);
-	
-	// cases
-	oldCases = (d3.sum(oneYearAgo, d=>d.cases_ma)*100000/usPop);
-	cases = (d3.sum(lastDay, d=>d.cases_ma)*100000/usPop);
-	casesPct = oldCases == 0 ? "Infinite (previous value=0)" : tablePctValue(cases/oldCases);
-	
-	hosp = movingAverage(data, "ip_covid", lastDate, 7)*100000/usPop;
-	oldHosp = movingAverage(data, "ip_covid", oneYearAgoDate, 7)*100000/usPop;
-	hospPct = oldHosp == 0 ? "Infinite (previous value=0)" : tablePctValue(hosp/oldHosp);
-
-	// deaths
-	oldDeaths = (d3.sum(oneYearAgo, d=>d.deaths_ma)*100000/usPop);
-	deaths = (d3.sum(lastDay, d=>d.deaths_ma)*100000/usPop);
-	deathsPct = oldDeaths == 0 ? "Infinite (previous value=0)" : tablePctValue(deaths/oldDeaths);
-	
-	// vaccines
-	totalVac = 0.0;
-	lastDay.forEach((d,i) => {
-		if (popLookup[d.state] != null){
-			totalVac += parseFloat(d.vaccine_pct)*popLookup[d.state]/100.0;
-		}
-	});
-	vacPct = 100.0*totalVac/usPop;
-	
-	
-	tbl = [];
-	tbl[0] = "United States";
-	tbl[1] = cases.toFixed(1);
-	tbl[2] = oldCases == 0 ? "Infinite (previous value=0)" : tablePctValue(cases/oldCases);
-	tbl[3] = hosp.toFixed(1);
-	tbl[4] = oldHosp == 0 ? "Infinite (previous value=0)" : tablePctValue(hosp/oldHosp);
-	tbl[5] = deaths.toFixed(2);
-	tbl[6] = oldDeaths == 0 ? "Infinite (previous value=0)" : tablePctValue(deaths/oldDeaths);
-	tbl[7] = vacPct.toFixed(1) + "%";
-	tblData.push(tbl);
-}
-
 
 function prepareTableData(){
 	prepareTableStateData("United States","US"); // make US first in table
