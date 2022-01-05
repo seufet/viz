@@ -1,1 +1,1 @@
-# Project for data visualizations by Thomas Seufert, MD.
+# Project for data visualizations by Tom Seufert, MD.

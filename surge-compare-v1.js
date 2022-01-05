@@ -62,6 +62,7 @@ var titleDiv;
 var colorByState;
 
 // data globals
+var masterData;
 var hhsData;
 var nytData;
 var statePop;
@@ -79,6 +80,9 @@ var stateNameLookup;
 	
 // date parser function
 var parseDate = d3.timeParse("%Y/%m/%d");
+let today = new Date();
+let oneDay = 1000 * 3600 * 24;
+	
 
 // SELECT BUTTONS
 
@@ -95,6 +99,17 @@ var groups = {
 	deaths_ma : "Covid Deaths",
 	deaths_100k_ma : "Covid Deaths (per 100k)"
 };
+
+// Custom regions for aggregations
+var regionUS = {
+	abbr: "US", name: "United States", 
+	states: ["AK","AL","AR","AZ","CA","CO","CT","DC","DE","FL","GA","HI","IA","ID","IL","IN","KS","KY","LA","MA","MD","ME","MI","MN","MO","MS","MT",
+		"NC","ND","NE","NH","NJ","NM","NV","NY","OH","OK","OR","PA","PR","RI","SC","SD","TN","TX","UT","VA","VT","WA","WI","WV","WY"]	
+};
+var regionNewEngland = {
+	abbr: "EN", name: "New England", states: ["CT","MA","ME","NH","RI","VT"]	
+};
+var customRegions = [regionUS,regionNewEngland];
 
 var explanationPct = "<b>Explanation: </b>The chart below shows the percentage change compared to the <i>same day one year earlier</i>. Where the plot is " +
 	"above the horizontal Equality line, numbers have gone up compared to the prior year. Where the plot is below Equality, numbers have gone down. " +
@@ -129,7 +144,6 @@ var statesSelected;
 var defaultStartDate = "2021/07/01";
 var defaultNumMonths = 8;
 var defaultData = "pctChange";
-var endDate = new Date();
 var paletteStr = "blue,red,black,brown,lightgreen";
 
 var startDate;
@@ -177,9 +191,134 @@ function selectElement(id, valueToSelect) {
 	if (element != null) element.value = valueToSelect;
 }
 
+// utility to get value of a select box
 function elementValue(id) {
 	let element = document.getElementById(id);
 	return element.value;
+}
+
+// add a custom region
+function applyCustomRegion(data, region) {
+	console.log("Custom region: " + region.name + " with " + region.states.length + " states.");
+	
+	let regionPop = 0.0;
+	region.states.forEach(d => regionPop += popLookup[d]);
+	popLookup[region.abbr] = regionPop;
+	region.population = regionPop;
+	console.log("Custom region pop: " + regionPop);
+	stateNameLookup[region.name] = region.abbr;
+	
+	data = data.filter(d => d.surge == "Year 2" && region.states.includes(d.state) && d.date.getTime()>parseDate("2020/04/01").getTime());
+	data.sort((a, b) => (a.date > b.date) ? 1 : -1);
+	
+	regionRows = [];
+	let nextRow = null;
+	let curDate = null;
+	data.forEach((d,i) => {
+		if (curDate == null || curDate.getTime() != d.date.getTime()){
+			nextRow = {
+				state:region.abbr, surge:"Year 2", series:region.abbr+", Year 2", date:d.date, dateStr:d.dateStr, 
+				pk:region.abbr+", Year 2"+"-"+d.date.getTime(),
+				cases:0, ip_covid:0, deaths:0, population:regionPop,
+				cases_ma:0, cases_100k_ma:0, deaths_ma:0, deaths_100k_ma:0, ip_covid:0, ip_covid_100k:0, vaccinated:0
+			};
+//			if (d.cases_100k_ma != null && d.ip_covid != null && d.vaccine_pct != null){
+				hhsLookup[nextRow.pk] = nextRow;
+				regionRows.push(nextRow);
+	//		}
+			curDate = d.date;
+		}
+		
+		//if (d.cases_100k_ma != null && d.ip_covid != null && d.vaccine_pct != null){
+			//if (isFinite(d.cases)) 
+				nextRow.cases += d.cases;
+			//if (isFinite(d.ip_covid)) 
+				nextRow.ip_covid += d.ip_covid;
+			//if (isFinite(d.deaths)) 
+				nextRow.deaths += d.deaths;
+			//if (isFinite(d.cases_ma)) 
+				nextRow.cases_ma += d.cases_ma;
+			//if (isFinite(d.deaths_ma)) 
+				nextRow.deaths_ma += d.deaths_ma;
+			//if (isFinite(d.vaccine_pct)) 
+				nextRow.vaccinated += (d.vaccine_pct * d.population / 100.0);
+		//}
+	});
+	console.log("Region " + region.name + " built with " + regionRows.length);
+	
+	regionRows.forEach(d => {
+		d.cases_100k_ma = 100000*d.cases_ma/regionPop;
+		d.ip_covid_100k = 100000*d.ip_covid/regionPop;
+		d.deaths_100k_ma = 100000*d.deaths_ma/regionPop;
+		d.vaccine_pct = (100.0*d.vaccinated/d.population);
+		//console.log(d.state + " - " + d.dateStr + " - " + d.cases_ma);
+	});
+	
+	let finalRow = regionRows[regionRows.length-1]; //regionRows.length-1
+	console.log(region.name + " cases=" + finalRow.cases_100k_ma + " ip=" + finalRow.ip_covid_100k + " deaths=" + finalRow.deaths_100k_ma);
+	console.log(region.name + " cases=" + finalRow.cases_ma + " ip=" + finalRow.ip_covid + " deaths=" + finalRow.deaths_ma);
+	
+	return regionRows;
+	
+	/*// last date with all data for the first state
+	st = data.filter(d => d.state == region.states[0] && d.surge == "Year 2");
+	st.sort((a, b) => (a.date > b.date) ? 1 : -1);
+	idx = st.length-1;
+	while (st[idx].cases_100k_ma == null || 
+		st[idx].ip_covid == null ||
+		st[idx].vaccine_pct == null) idx--; // find last day with all data present
+	lastDate = st[idx].date;
+	console.log("Region last day:" + lastDate);*/
+	/*
+	let newDate = new Date(d.date.getFullYear()+1,d.date.getMonth(),d.date.getDate());
+		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+d.date.getTime()]);
+		
+		// if prior row exists, add it to the priorYear array
+		if (priorRow != null) {
+			priorRow.surge = "Year 1";
+			priorRow.series = d.state + ", " + priorRow.surge;
+			priorRow.date = newDate;
+			priorRow.dateStr = d.dateStr;
+			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
+			priorYear.push(priorRow);
+			
+			d.prior = priorRow;
+		}*/
+/*
+	// cases
+	oldCases = (d3.sum(oneYearAgo, d=>d.cases_ma)*100000/usPop);
+	cases = (d3.sum(lastDay, d=>d.cases_ma)*100000/usPop);
+	casesPct = oldCases == 0 ? "Infinite (previous value=0)" : tablePctValue(cases/oldCases);
+	
+	hosp = movingAverage(data, "ip_covid", lastDate, 7)*100000/usPop;
+	oldHosp = movingAverage(data, "ip_covid", oneYearAgoDate, 7)*100000/usPop;
+	hospPct = oldHosp == 0 ? "Infinite (previous value=0)" : tablePctValue(hosp/oldHosp);
+
+	// deaths
+	oldDeaths = (d3.sum(oneYearAgo, d=>d.deaths_ma)*100000/usPop);
+	deaths = (d3.sum(lastDay, d=>d.deaths_ma)*100000/usPop);
+	deathsPct = oldDeaths == 0 ? "Infinite (previous value=0)" : tablePctValue(deaths/oldDeaths);
+	
+	// vaccines
+	totalVac = 0.0;
+	lastDay.forEach((d,i) => {
+		if (popLookup[d.state] != null){
+			totalVac += parseFloat(d.vaccine_pct)*popLookup[d.state]/100.0;
+		}
+	});
+	vacPct = 100.0*totalVac/usPop;
+	
+	
+	tbl = [];
+	tbl[0] = "United States";
+	tbl[1] = cases.toFixed(1);
+	tbl[2] = oldCases == 0 ? "Infinite (previous value=0)" : tablePctValue(cases/oldCases);
+	tbl[3] = hosp.toFixed(1);
+	tbl[4] = oldHosp == 0 ? "Infinite (previous value=0)" : tablePctValue(hosp/oldHosp);
+	tbl[5] = deaths.toFixed(2);
+	tbl[6] = oldDeaths == 0 ? "Infinite (previous value=0)" : tablePctValue(deaths/oldDeaths);
+	tbl[7] = vacPct.toFixed(1) + "%";
+	tblData.push(tbl);*/
 }
 
 
@@ -262,23 +401,6 @@ function loadPage(error, vd) {
 	  .attr("value", d => d) // co2responding value returned by the button
 	selectElement("monthsButton",defaultNumMonths);
 
-	// this just makes sure that "None" always sorts to the top
-	stateSort = Object.keys(stateNameLookup).sort((a,b) => (a == "None" ? -1 : b == "None" ? 1 : a>b ? 1 : -1));
-	d3.selectAll(".stateButton")
-	  .selectAll('myOptions')
-		.data(stateSort)
-	  .enter()
-		.append('option')
-	  .text(d => d) // text showed in the menu
-	  .attr("value", d => stateNameLookup[d]) // co2responding value returned by the button
-
-	// default values for states
-	statesSelected = defaultStatesSelected;
-	for (i=0; i<statesSelected.length; i++){
-		if (statesSelected[i] != null) {
-			selectElement("state"+(i+1),statesSelected[i]);
-		}
-	}
 	selectElement("startDateButton",defaultStartDate);
 	selectElement("selectButton",defaultData);
 	groupSelected = defaultData;
@@ -299,17 +421,26 @@ function loadPage(error, vd) {
 		nytLookup[pk] = d;
 	});
 	
+	// keep only needed columns from hhs data
+	masterData = [];
+	hhsData.forEach(d => {
+		let row = {};
+		row.date = parseDate(d.date);
+		row.dateStr = d.date.replace(/\//g,"-"); // replace / with -
+		row.state = d.state;
+		row.ip_covid = parseInt(d.inpatient_beds_used_covid);
+		masterData.push(row);
+	});
+	hhsData = null;
+	
 	// build a record lookup by date
 	let vaccineGood = 0, vaccineBad = 0;
 	let lastVaxByState = {};
-	hhsData.sort((a, b) => (a.date > b.date) ? 1 : -1);
-	hhsData.forEach(function(d) {
-		d.dateStr = d.date.replace(/\//g,"-"); // replace / with -
+	masterData.sort((a, b) => (a.date > b.date) ? 1 : -1);
+	masterData.forEach(d => {
 		d.surge = "Year 2";
 		d.series = d.state + ", " + d.surge;
-		d.date = parseDate(d.date);
-		d.ip_covid = parseInt(d.inpatient_beds_used_covid);
-		d.deaths_covid = parseInt(d.deaths_covid);
+		//d.deaths_covid = parseInt(d.deaths_covid);
 		
 		nytRow = nytLookup[d.state + "-" + d.dateStr];
 		if (nytRow != null) {
@@ -336,12 +467,162 @@ function loadPage(error, vd) {
 		}
 		
 		pop = popLookup[d.state];
+		d.population = pop;
 		d.ip_covid_100k = 100000*d.ip_covid/pop;
-		d.deaths_covid_100k = 100000*d.deaths_covid/pop;
 		d.pk = d.series + "-" + d.date.getTime();
 		hhsLookup[d.pk] = d;
 	});
 	console.log("vaccine good: " + vaccineGood + " - vaccineBad: " + vaccineBad);
+
+	// Then add aggregations for US, regions here
+	console.log("length before custom regions: " + masterData.length);
+	customRegions.forEach(d => {
+		masterData = masterData.concat(applyCustomRegion(masterData, d));
+		console.log("length after custom region: " + d.name + " = " + masterData.length);
+	});
+
+
+	// this just makes sure that "None" always sorts to the top
+	stateSort = Object.keys(stateNameLookup).sort((a,b) => (a == "None" ? -1 : b == "None" ? 1 : a>b ? 1 : -1));
+	d3.selectAll(".stateButton")
+	  .selectAll('myOptions')
+	  .data(stateSort)
+	  .enter()
+	  .append('option')
+	  .text(d => d) // text showed in the menu
+	  .attr("value", d => stateNameLookup[d]) // co2responding value returned by the button
+
+	// default values for states
+	statesSelected = defaultStatesSelected;
+	for (i=0; i<statesSelected.length; i++){
+		if (statesSelected[i] != null) {
+			selectElement("state"+(i+1),statesSelected[i]);
+		}
+	}
+	
+
+	// prior year records
+	let priorYear = [];
+	
+	// add records for prior year data
+	masterData.forEach(function(d) {
+		// make a copy of the data for a year earlier than d, and add it to the priorYear array with a modified state name
+		// this enables us to have lines for the same state/date, but with the prior year records having a false date
+		let priorDate = new Date(d.date.getFullYear()-1,d.date.getMonth(),d.date.getDate());
+		let lookup = hhsLookup[d.series+"-"+priorDate.getTime()];
+		
+		// if prior row exists, add it to the priorYear array
+		if (lookup != null) {
+			let priorRow = Object.assign({}, lookup);
+			priorRow.surge = "Year 1";
+			priorRow.series = d.state + ", " + priorRow.surge;
+			priorRow.date = d.date;
+			priorRow.dateStr = d.dateStr;
+			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
+			priorYear.push(priorRow);			
+			d.prior = priorRow;
+		}
+	});
+	
+	// add some for between 10-12 months ago, so we can see last year's values ahead of today a bit
+	let startDateAgo = 1;//Math.floor((today.getTime()-startDate.getTime())/oneDay);
+	let daysAdd = 90;//numMonthsSel*30-startDateAgo;
+	
+	console.log("Start date days ago: " + startDateAgo + " - daysAdd=" + daysAdd);
+	let oneYearAgo = new Date(today.getFullYear()-1,today.getMonth(),today.getDate());
+	let peekData = masterData.filter(d => {
+		daysDiff = Math.floor((d.date.getTime()-oneYearAgo.getTime())/oneDay);
+		return (daysDiff >= 0 && daysDiff < daysAdd);
+	});
+	peekData.forEach(d => {
+		let newDate = new Date(d.date.getFullYear()+1,d.date.getMonth(),d.date.getDate());
+		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+d.date.getTime()]);
+		
+		// if prior row exists, add it to the priorYear array
+		if (priorRow != null) {
+			priorRow.surge = "Year 1";
+			priorRow.series = d.state + ", " + priorRow.surge;
+			priorRow.date = newDate;
+			priorRow.dateStr = d.dateStr;
+			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
+			priorYear.push(priorRow);
+			
+			d.prior = priorRow;
+		}
+	});
+	
+	console.log("orig masterData size: " + masterData.length);
+	console.log("priorYear size: " + priorYear.length);
+	masterData = masterData.concat(priorYear);
+	console.log("combined data size: " + masterData.length);
+	
+	//////////////////////////////////////////////////////////////////////////////////	
+	// Compute 7-day moving averages for hospitalizations
+		
+	// get set of unique series
+	uniqueSeries = Array.from(new Set(masterData.map(d => d.series)));
+	//uniqueSeries.sort();
+	//console.log(uniqueSeries);
+	
+	// add the moving averages
+	uniqueSeries.forEach(series => {
+		maDays = 7;
+		seriesData = masterData.filter(d => d.series == series);
+		seriesData.sort((a, b) => (a.date > b.date) ? 1 : -1);
+		seriesData[0].ip_covid_rollsum = seriesData[0].ip_covid;
+		seriesData[0].ip_covid_100k_rollsum = seriesData[0].ip_covid_100k;
+
+		if (series.substring(0,2) == "MA") console.log(JSON.stringify(seriesData[0]));
+		for (var i = 1 ; i < seriesData.length ; i++) {
+			seriesData[i].ip_covid_rollsum = seriesData[i-1].ip_covid_rollsum + seriesData[i].ip_covid;
+			seriesData[i].ip_covid_100k_rollsum = seriesData[i-1].ip_covid_100k_rollsum + seriesData[i].ip_covid_100k;
+		}
+		for (var i = 0 ; i < seriesData.length ; i++) {
+			if (i<maDays) {
+				seriesData[i].ip_covid_ma = 0;
+				seriesData[i].ip_covid_100k_ma = 0;
+			}
+			else {
+				seriesData[i].ip_covid_ma = (seriesData[i].ip_covid_rollsum-seriesData[i-maDays].ip_covid_rollsum)/maDays;
+				seriesData[i].ip_covid_100k_ma = (seriesData[i].ip_covid_100k_rollsum-seriesData[i-maDays].ip_covid_100k_rollsum)/maDays;
+			}
+		}
+	});
+	
+	
+	uniqueSeries.forEach(series => {
+		seriesData = masterData.filter(d => d.series == series);
+		seriesData.sort((a, b) => (a.date > b.date) ? 1 : -1);
+		
+		// clean data - track last good death # for each state
+		lastGoodDeathCt = {};
+		
+		// now that the moving averages are calculated, do the pct change
+		seriesData.forEach((d,i) => {
+			if (d.prior == null) return;
+			if (d.prior.cases_ma != 0){
+				d.change_cases_ma = (d.cases_ma/d.prior.cases_ma);
+			} 
+			else d.change_cases_ma = 1;
+		
+			/*if (d.state.substring(0,2) == "US") {
+				console.log(d.series + ": i=" + i + " date=" + d.dateStr + " priorCovid=" + d.prior.ip_covid_ma + " ipCovidMA=" + d.ip_covid_ma +
+					" ipCovid=" + d.ip_covid + " ipCovid100k=" + d.ip_covid_100k);
+			}*/
+				
+			if (d.prior.ip_covid_ma != 0){
+				d.change_ip_covid_ma = (d.ip_covid_ma/d.prior.ip_covid_ma);
+			} 
+			else d.change_ip_covid_ma = 1;
+			
+			if (d.prior.deaths_ma != 0){
+				d.change_deaths_ma = (d.deaths_ma/d.prior.deaths_ma);
+				lastGoodDeathCt[d.state] = d.change_deaths_ma;
+			} 
+			else if (lastGoodDeathCt[d.state] != null) d.change_deaths_ma = lastGoodDeathCt[d.state];
+			else d.change_deaths_ma = 1;	
+		});	
+	});
 
 	//////////////////////////////////////////////////////////////////
 	// Hidden tooltip
@@ -376,7 +657,7 @@ function loadPage(error, vd) {
 	// Add Y axis
 	  svg.selectAll(".myYAxis").remove();
 	  y = d3.scaleLinear()
-		.domain([0, d3.max(hhsData, function(d) { return +d[groupSelected]; })])
+		.domain([0, d3.max(masterData, function(d) { return +d[groupSelected]; })])
 		.range([ height-75, 0 ]);
 	  yAxis = d3.axisLeft().scale(y);
 	  svg.append("g")  
@@ -384,7 +665,7 @@ function loadPage(error, vd) {
 	  .call(yAxis);
 	  
 	  x = d3.scaleTime()
-    .domain(d3.extent(hhsData, function(d) { return d.date; }))
+    .domain(d3.extent(masterData, function(d) { return d.date; }))
     .range([ 0, width ]);
 	xAxis = d3.axisBottom(x).scale(x).tickFormat(d3.timeFormat("%b %d"));
   
@@ -421,76 +702,26 @@ function update() {
 	// start date and # months
 	numMonthsSel = parseInt(elementValue("monthsButton"));
 	startDate = parseDate(elementValue("startDateButton"));
-	console.log("Start Date:" + startDate + " Months:" + numMonthsSel);
+	let endDate = new Date(startDate.getTime()+oneDay*30*numMonthsSel);
+	console.log("Start Date:" + startDate + " Months:" + numMonthsSel + " End Date=" + endDate);
 	
 	// start with only selected states to ease processing/memory
-	var data = hhsData.filter(d => statesSelected.includes(d.state));
+	var data = masterData.filter(d => statesSelected.includes(d.state) &&
+		d.date >= startDate && d.date <= endDate);
 
-	
-	// prior year records
-	let priorYear = [];
-	
-	// add records for the needed columns
-	data.forEach(function(d) {
-		// make a copy of the data for a year earlier than d, and add it to the priorYear array with a modified state name
-		// this enables us to have lines for the same state/date, but with the prior year records having a false date
-		let priorDate = new Date(d.date.getFullYear()-1,d.date.getMonth(),d.date.getDate());
-		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+priorDate.getTime()]);
-		
-		// if prior row exists, add it to the priorYear array
-		if (priorRow != null) {
-			priorRow.surge = "Year 1";
-			priorRow.series = d.state + ", " + priorRow.surge;
-			priorRow.date = d.date;
-			priorRow.dateStr = d.dateStr;
-			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
-			priorYear.push(priorRow);
-			
-			d.prior = priorRow;
-		}
-	});
-	
-	// add some for between 10-12 months ago, so we can see last year's values ahead of today a bit
-	let oneDay = 1000 * 3600 * 24;
-	let today = new Date();
-	let startDateAgo = Math.floor((today.getTime()-startDate.getTime())/oneDay);
-	let daysAdd = numMonthsSel*30-startDateAgo;
-	
-	console.log("Start date days ago: " + startDateAgo + " - numMonths=" + numMonthsSel);
-	let oneYearAgo = new Date(today.getFullYear()-1,today.getMonth(),today.getDate());
-	let peekData = data.filter(d => {
-		daysDiff = Math.floor((d.date.getTime()-oneYearAgo.getTime())/oneDay);
-		return (daysDiff >= 0 && daysDiff < daysAdd);
-	});
-	console.log("PEEK DATA FILTER:" + peekData.length);
-	peekData.forEach(d => {
-		let newDate = new Date(d.date.getFullYear()+1,d.date.getMonth(),d.date.getDate());
-		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+d.date.getTime()]);
-		
-		// if prior row exists, add it to the priorYear array
-		if (priorRow != null) {
-			priorRow.surge = "Year 1";
-			priorRow.series = d.state + ", " + priorRow.surge;
-			priorRow.date = newDate;
-			priorRow.dateStr = d.dateStr;
-			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
-			priorYear.push(priorRow);
-			
-			d.prior = priorRow;
-		}
-	});
-	
-	console.log("orig hhsData size: " + hhsData.length);
-	console.log("priorYear size: " + priorYear.length);
-	data = hhsData.concat(priorYear);
-	console.log("combined data size: " + data.length);
-	
+	// update the unique series
+	uniqueSeries = Array.from(new Set(data.map(d => d.series)));
+	uniqueSeries.sort();
+	console.log(uniqueSeries);
+
 	// state palette
 	colorByState = d3.scaleOrdinal()
 	.domain(statesSelected)
 	.range(paletteStr.split(","));
 	
 	// sort after assigning palette
+	// so color will be determined by which drop-down state appears in, not order of appearance in legend
+	// this prevents states from switching colors when states are added/subtracted, which is confusing
 	statesSelected.sort();
 	
 	// update title
@@ -503,64 +734,11 @@ function update() {
 	
 	// IMPORTANT: make sure we're still sorted by date, else the lines will scribble all over in the wrong order!
 	data.sort((a, b) => (a.date > b.date) ? 1 : -1);
-    
-	//////////////////////////////////////////////////////////////////////////////////	
-	// Compute 7-day moving averages for each series
-		
-	// get set of unique series
-	uniqueSeries = Array.from(new Set(data.map(d => d.series)));
-	uniqueSeries.sort();
-	console.log(uniqueSeries);
 	
-	uniqueSeries.forEach(series => {
-		maDays = 7;
-		seriesData = data.filter(d => d.series == series);
-		seriesData.sort((a, b) => (a.date > b.date) ? 1 : -1);
-		seriesData[0].ip_covid_rollsum = seriesData[0].ip_covid;
-		seriesData[0].ip_covid_100k_rollsum = seriesData[0].ip_covid_100k;
-		for (var i = 1 ; i < seriesData.length ; i++) {
-			seriesData[i].ip_covid_rollsum = seriesData[i-1].ip_covid_rollsum + seriesData[i].ip_covid;
-			seriesData[i].ip_covid_100k_rollsum = seriesData[i-1].ip_covid_100k_rollsum + seriesData[i].ip_covid_100k;
-		}
-		for (var i = 0 ; i < seriesData.length ; i++) {
-			if (i<maDays) {
-				seriesData[i].ip_covid_ma = 0;
-				seriesData[i].ip_covid_100k_ma = 0;
-			}
-			else {
-				seriesData[i].ip_covid_ma = (seriesData[i].ip_covid_rollsum-seriesData[i-maDays].ip_covid_rollsum)/maDays;
-				seriesData[i].ip_covid_100k_ma = (seriesData[i].ip_covid_100k_rollsum-seriesData[i-maDays].ip_covid_100k_rollsum)/maDays;
-			}
-		}
-		
-		// clean data - track last good death # for each state
-		lastGoodDeathCt = {};
-		
-		// now that the moving averages are calculated, do the pct change
-		seriesData.forEach(d => {
-			if (d.prior == null) return;
-			if (d.prior.cases_ma != 0){
-				d.change_cases_ma = (d.cases_ma/d.prior.cases_ma);
-			} 
-			else d.change_cases_ma = 1;
-		
-			if (d.prior.ip_covid_ma != 0){
-				d.change_ip_covid_ma = (d.ip_covid_ma/d.prior.ip_covid_ma);
-			} 
-			else d.change_ip_covid_ma = 1;
-			
-			if (d.prior.deaths_ma != 0){
-				d.change_deaths_ma = (d.deaths_ma/d.prior.deaths_ma);
-				lastGoodDeathCt[d.state] = d.change_deaths_ma;
-			} 
-			else if (lastGoodDeathCt[d.state] != null) d.change_deaths_ma = lastGoodDeathCt[d.state];
-			else d.change_deaths_ma = 1;	
-		});	
-	});
-	
-	// remove our equality line
+	// remove equality line, if present
 	svg.selectAll(".equalityLine").remove();
 
+	// now perform series-specific updates
 	if (groupSelected == "pctChange") {
 		updatePct(data);
 	} else {
@@ -684,13 +862,6 @@ function updateStandard(data){
 		.duration(1000)
 		.call(yAxis);
 
-	// if we have a different # of lines to draw, remove the old ones
-	// otherwise we have extra lines hanging around if one or more are supposed to be removed
-	if (uniqueSeries.length != lastSeriesLength){
-		svg.selectAll(".lineTest").remove();
-	}
-	
-	lastSeriesLength = uniqueSeries.length;
 	var u = svg.selectAll(".lineTest").data(sumstat);
 	
 	  // Draw the lines
@@ -853,6 +1024,8 @@ function updatePct(data){
   data = data.filter((d,i) => d.date >= startDate && d.surge == "Year 2");
   console.log("updatePct initial data: " + data.length);
 
+	// we have to do some work to handle bad/missing values for the pct change, to avoid
+	// divide by zero, infinite increase going 0-->1, etc. 
 	toAdd = [];
 	lastGoodHosp = 1;
 	lastGoodCases = 1;
@@ -879,28 +1052,15 @@ function updatePct(data){
 		if (!isFinite(d.pct_value)) d.pct_value = lastGoodCases;
 		else if (d.pct_value == 0) d.pct_value = 0.01;
 		else lastGoodCases = d.pct_value;
-		
-		//if (!isFinite(parseFloat(d.change_ip_covid_ma))) console.log("bad parse ip_covid: " + d.change_ip_covid_ma + " - " + d.date);
-		//if (!isFinite(parseFloat(d.change_deaths_ma))) console.log("bad parse deaths: " + d.change_death_ma + " - " + d.date);
-		//if (!isFinite(parseFloat(d.change_cases_ma))) console.log("bad parse cases: " + d.change_cases_ma + " - " + d.date);
 	});
 	data = data.concat(toAdd);
 	
 	badData = data.filter(d => !isFinite(d.pct_value));
 	console.log("rows with non-finite data:" + badData.length);
 	if (badData.length > 0) console.log("bad data: " + badData[0].pct_value);
-	//console.log("rows after series creation: " + data.length);
-
-	/*nh = data.filter(d => d.pct_series == "NH,2");
-	console.log("NH values: " + nh.length);
-	nh.forEach(d => {
-			console.log("NH " + d.date.getMonth() + "-" + d.date.getDate() + " " + d.pct_series + "=" + d.pct_value.toFixed(2));
-	});*/
-
+	
 	// update y axis to show logarithmic as decreases are in range 0-1 and increase e.g. 1-20.
 	// the domain needs to include the max/min value of all 3 metrics for each state/date
-	//dataMin = d3.min(data, d => Math.min(d.change_cases_ma,d.change_deaths_ma,d.change_ip_covid_ma));
-	//dataMax = d3.max(data, d => Math.max(d.change_cases_ma,d.change_deaths_ma,d.change_ip_covid_ma));
 	dataMin = d3.min(data, d => d.pct_value);
 	dataMax = d3.max(data, d => d.pct_value);
 	if (dataMin == 0) dataMin = 0.01; // avoid 0, which will be NaN for log(x)
@@ -1197,6 +1357,7 @@ function sortTable(table, col, reverse, startIdx) {
     for(i = 0; i < tr.length; ++i) tb.appendChild(tr[i]); // append each row in order
 }
 
+// make a table sortable
 function makeSortable(table) {
     var th = table.tHead, i;
     th && (th = th.rows[0]) && (th = th.cells);
@@ -1208,6 +1369,7 @@ function makeSortable(table) {
     }(i));
 }
 
+// convenience to make all tables on page sortable
 function makeAllSortable(parent) {
     parent = parent || document.body;
     var t = parent.getElementsByTagName('table'), i = t.length;
@@ -1245,13 +1407,17 @@ function movingAverage(dataSet, col, dt, days){
 function prepareTableStateData(stateName,stateAbbr){
 	//console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr);
 
-	st = hhsData.filter(d => d.state == stateAbbr && d.surge == "Year 2");
+	//if (stateAbbr == "US" || stateAbbr == "EN") return;
+
+	st = masterData.filter(d => d.state == stateAbbr && d.surge == "Year 2");
 	st.sort((a, b) => (a.date > b.date) ? 1 : -1);
 	
 	idx = st.length-1;
-	while (st[idx].cases_100k_ma == null || 
-		st[idx].ip_covid == null ||
-		st[idx].vaccine_pct == null) idx--; // find last day with all data present
+	//console.log("Table state data: name=" + stateName + " abbr=" + stateAbbr + " idx=" + idx + " len=" + (st.length) + " st[idx]=" + JSON.stringify(st[idx]));
+	
+	while (!isFinite(st[idx].cases_100k_ma) || 
+		!isFinite(st[idx].ip_covid) ||
+		!isFinite(st[idx].vaccine_pct)) idx--; // find last day with all data present
 	lastDay = st[idx];
 	oneYearAgo = st[idx-365];
 	console.log("last day:" + lastDay.date + " year ago=" + oneYearAgo.date);
@@ -1268,9 +1434,9 @@ function prepareTableStateData(stateName,stateAbbr){
 	tbl[2] = oldCases == 0 ? "Infinite (previous value=0)" : tablePctValue(lastDay.cases_100k_ma/oldCases);
 	tbl[3] = hosp.toFixed(1);
 	tbl[4] = oldHosp == 0 ? "Infinite (previous value=0)" : tablePctValue(hosp/oldHosp);
-	tbl[5] = lastDay.deaths_100k_ma;
+	tbl[5] = lastDay.deaths_100k_ma.toFixed(2);
 	tbl[6] = oldDeaths == 0 ? "Infinite (previous value=0)" : tablePctValue(lastDay.deaths_100k_ma/oldDeaths);
-	tbl[7] = lastDay.vaccine_pct + "%";
+	tbl[7] = lastDay.vaccine_pct.toFixed(1) + "%";
 	tblData.push(tbl);
 }
 
@@ -1278,7 +1444,7 @@ function prepareTableStateData(stateName,stateAbbr){
 function prepareTableUSData(){
 	let usPop = d3.sum(Object.values(popLookup));
 	
-	data = hhsData.filter(d => d.surge == "Year 2");
+	data = masterData.filter(d => d.surge == "Year 2");
 	data.sort((a, b) => (a.date > b.date) ? 1 : -1);
 	
 	st = data.filter(d => d.state == "MA" && d.surge == "Year 2");
@@ -1336,10 +1502,10 @@ function prepareTableUSData(){
 
 
 function prepareTableData(){
-	prepareTableUSData();
+	prepareTableStateData("United States","US"); // make US first in table
 	let keys = Object.keys(stateNameLookup);
 	keys.forEach(d => {
-		if (d != "None"){
+		if (d != "None" && d != "United States"){
 			prepareTableStateData(d,stateNameLookup[d]);
 		}
 	});
