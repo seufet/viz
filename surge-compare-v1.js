@@ -14,13 +14,20 @@
 	Tooltips: https://bl.ocks.org/dianaow/0da76b59a7dffe24abcfa55d5b9e163e
 	Case, death data: NY Times, https://github.com/nytimes/covid-19-data
 	Hospitalization, death data: HealthData.gov, https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD
+	Facility level: https://healthdata.gov/api/views/uqq2-txqb/rows.csv?accessType=DOWNLOAD, https://healthdata.gov/Hospital/COVID-19-Reported-Patient-Impact-and-Hospital-Capa/uqq2-txqb
 	
 	v2 Design:
 	-Select states: 1-5 --> nest by state
 	-Select data: case, death, hosp, vacc
 	-Select metric: % Change (1 Year), 7-Day Average (Per 100k), 7-Day Average (Count)
 	-Select dates: start date, # months
+	-ICU: adult_icu_bed_covid_utilization_numerator
+	-Pedi: total_pediatric_patients_hospitalized_confirmed_and_suspected_covid
+	-Flu: total_patients_hospitalized_confirmed_influenza
+
 	
+	- Variant proportions:
+	https://covid.cdc.gov/covid-data-tracker/#variant-proportions
 	
 	- enter(). path, path, path, path for each metric with different classes: 
 		case, case-per, case-chg, etc.
@@ -87,7 +94,7 @@ let oneDay = 1000 * 3600 * 24;
 // SELECT BUTTONS
 
 // the currently selected group
-groupSelected = "cases_ma";
+groupSelected = "ip_covid_100k_ma";
 
 // Map column names to user-friendly descriptions
 var groups = {
@@ -96,8 +103,14 @@ var groups = {
 	cases_100k_ma : "Covid Cases (per 100k)",
 	ip_covid_ma : "Covid Hospitalized",
 	ip_covid_100k_ma : "Covid Hospitalized (per 100k)",
+	hosp_icu_ma : "Covid ICU",
+	hosp_icu_100k_ma : "Covid ICU (per 100k)",
+	hosp_pedi_ma : "Covid Pediatric Hosp",
+	hosp_pedi_100k_ma : "Covid Pediatric Hosp (per 100k)",
 	deaths_ma : "Covid Deaths",
-	deaths_100k_ma : "Covid Deaths (per 100k)"
+	deaths_100k_ma : "Covid Deaths (per 100k)",
+	hosp_flu_ma : "Influenza Hospitalized",
+	hosp_flu_100k_ma : "Influenza Hospitalized (per 100k)",
 };
 
 // Custom regions for aggregations
@@ -125,18 +138,27 @@ var customRegions = [regionUS,regionNewEngland,regionUSWest,regionUSMidwest,regi
 
 var explanationPct = "<b>Explanation: </b>The chart below shows the percentage change compared to the <i>same day one year earlier</i>. Where the plot is " +
 	"above the horizontal Equality line, numbers have gone up compared to the prior year. Where the plot is below Equality, numbers have gone down. " +
-	"To improve viewing, a logarithmic scale is used. <a href=\"https://rarelyread.medium.com/seasons-of-covid-in-charts-e0757ff4afb1\">More Information</a>";
+	"To improve viewing, a logarithmic scale is used. <a href=\"https://github.com/seufet/viz\">Source Code</a>&nbsp;&nbsp;" +
+	"<a href=\"https://rarelyread.medium.com/seasons-of-covid-in-charts-e0757ff4afb1\">More Information</a>";
+	
 var explanationStd = "<b>Explanation: </b> The solid lines show data from the most recent year. Dashed lines show data from one year earlier. " +
 	"Note that the dashed lines may extend further right than the solid ones. This permits seeing last year's trends for the coming months, which is "+
-	"helpful to visualize the (potential) road ahead based on prior seasonal patterns. <a href=\"https://rarelyread.medium.com/seasons-of-covid-in-charts-e0757ff4afb1\">More Information</a>";
+	"helpful to visualize the (potential) road ahead based on prior seasonal patterns. <a href=\"https://github.com/seufet/viz\">Source Code</a>&nbsp;&nbsp;" +
+	"<a href=\"https://rarelyread.medium.com/seasons-of-covid-in-charts-e0757ff4afb1\">More Information</a>";
 
 var decimals = {
 	cases_ma : 0,
 	cases_100k_ma : 0,
 	ip_covid_ma : 0,
 	ip_covid_100k_ma : 1,
+	hosp_icu_ma: 0,
+	hosp_icu_100k_ma: 2,
+	hosp_pedi_ma: 0,
+	hosp_pedi_100k_ma: 2,
 	deaths_ma : 1,
-	deaths_100k_ma : 2
+	deaths_100k_ma : 2,
+	hosp_flu: 0,
+	hosp_flu_100k: 2
 };
 
 var startMonths = {
@@ -151,12 +173,12 @@ var startMonths = {
 };
 
 // basic configuration
-var defaultStatesSelected = ["MA","XX","XX","XX","XX"];
+var defaultStatesSelected = ["MA","US","XX","XX","XX"];
 var statesSelected;
-var defaultStartDate = "2021/07/01";
-var defaultNumMonths = 8;
-var defaultData = "pctChange";
-var paletteStr = "blue,red,black,brown,lightgreen";
+var defaultStartDate = "2021/05/01";
+var defaultNumMonths = 10;
+var defaultData = "ip_covid_100k_ma";
+var paletteStr = "blue,black,red,brown,lightgreen";
 
 var startDate;
 var numMonthsSel;
@@ -231,8 +253,9 @@ function applyCustomRegion(data, region) {
 			nextRow = {
 				state:region.abbr, surge:"Year 2", series:region.abbr+", Year 2", date:d.date, dateStr:d.dateStr, 
 				pk:region.abbr+", Year 2"+"-"+d.date.getTime(),
-				cases:0, ip_covid:0, deaths:0, population:regionPop,
-				cases_ma:0, cases_100k_ma:0, deaths_ma:0, deaths_100k_ma:0, ip_covid:0, ip_covid_100k:0, vaccinated:0
+				cases:0, deaths:0, population:regionPop,
+				cases_ma:0, cases_100k_ma:0, deaths_ma:0, deaths_100k_ma:0, ip_covid:0, ip_covid_100k:0, vaccinated:0,
+				hosp_icu:0, hosp_icu_100k:0, hosp_flu:0, hosp_flu_100k:0, hosp_pedi:0, hosp_pedi_100k:0
 			};
 //			if (d.cases_100k_ma != null && d.ip_covid != null && d.vaccine_pct != null){
 				hhsLookup[nextRow.pk] = nextRow;
@@ -241,26 +264,24 @@ function applyCustomRegion(data, region) {
 			curDate = d.date;
 		}
 		
-		//if (d.cases_100k_ma != null && d.ip_covid != null && d.vaccine_pct != null){
-			//if (isFinite(d.cases)) 
-				nextRow.cases += d.cases;
-			//if (isFinite(d.ip_covid)) 
-				nextRow.ip_covid += d.ip_covid;
-			//if (isFinite(d.deaths)) 
-				nextRow.deaths += d.deaths;
-			//if (isFinite(d.cases_ma)) 
-				nextRow.cases_ma += d.cases_ma;
-			//if (isFinite(d.deaths_ma)) 
-				nextRow.deaths_ma += d.deaths_ma;
-			//if (isFinite(d.vaccine_pct)) 
-				nextRow.vaccinated += (d.vaccine_pct * d.population / 100.0);
-		//}
+		nextRow.cases += d.cases;
+		nextRow.ip_covid += d.ip_covid;
+		nextRow.hosp_icu += d.hosp_icu;
+		nextRow.hosp_pedi += d.hosp_pedi;
+		nextRow.hosp_flu += d.hosp_flu;
+		nextRow.deaths += d.deaths;
+		nextRow.cases_ma += d.cases_ma;
+		nextRow.deaths_ma += d.deaths_ma;
+		nextRow.vaccinated += (d.vaccine_pct * d.population / 100.0);
 	});
 	//console.log("Region " + region.name + " built with " + regionRows.length);
 	
 	regionRows.forEach(d => {
 		d.cases_100k_ma = 100000*d.cases_ma/regionPop;
 		d.ip_covid_100k = 100000*d.ip_covid/regionPop;
+		d.hosp_icu_100k = 100000*d.hosp_icu/regionPop;
+		d.hosp_pedi_100k = 100000*d.hosp_pedi/regionPop;
+		d.hosp_flu_100k = 100000*d.hosp_flu/regionPop;
 		d.deaths_100k_ma = 100000*d.deaths_ma/regionPop;
 		d.vaccine_pct = (100.0*d.vaccinated/d.population);
 		//console.log(d.state + " - " + d.dateStr + " - " + d.cases_ma);
@@ -434,6 +455,9 @@ function loadPage(error, vd) {
 	});
 	
 	// keep only needed columns from hhs data
+	//-ICU: adult_icu_bed_covid_utilization_numerator
+	//-Pedi: total_pediatric_patients_hospitalized_confirmed_and_suspected_covid
+	//-Flu: total_patients_hospitalized_confirmed_influenza
 	masterData = [];
 	hhsData.forEach(d => {
 		let row = {};
@@ -441,6 +465,16 @@ function loadPage(error, vd) {
 		row.dateStr = d.date.replace(/\//g,"-"); // replace / with -
 		row.state = d.state;
 		row.ip_covid = parseInt(d.inpatient_beds_used_covid);
+		row.hosp_icu = parseInt(d.staffed_icu_adult_patients_confirmed_and_suspected_covid);
+		row.hosp_pedi = parseInt(d.total_pediatric_patients_hospitalized_confirmed_and_suspected_covid);
+		row.hosp_flu = parseInt(d.total_patients_hospitalized_confirmed_influenza);
+		if (!isFinite(row.ip_covid)) row.ip_covid = 0;
+		if (!isFinite(row.hosp_icu)) row.hosp_icu = 0;
+		if (!isFinite(row.hosp_flu)) row.hosp_flu = 0;
+		if (!isFinite(row.hosp_pedi)) row.hosp_pedi = 0;
+		//if (row.state == "MA") console.log(row.dateStr + " ICU:" + row.hosp_icu + "-" + d.staffed_icu_adult_patients_confirmed_and_suspected_covid);
+		//if (row.state == "MA") console.log(row.dateStr + " Pedi:" + row.hosp_pedi + "-" + d.total_pediatric_patients_hospitalized_confirmed_and_suspected_covid);
+		//if (row.state == "MA") console.log(row.dateStr + " Flu:" + row.hosp_flu + "-" + d.total_patients_hospitalized_confirmed_influenza);
 		masterData.push(row);
 	});
 	hhsData = null;
@@ -481,6 +515,9 @@ function loadPage(error, vd) {
 		pop = popLookup[d.state];
 		d.population = pop;
 		d.ip_covid_100k = 100000*d.ip_covid/pop;
+		d.hosp_icu_100k = 100000*d.hosp_icu/pop;
+		d.hosp_pedi_100k = 100000*d.hosp_pedi/pop;
+		d.hosp_flu_100k = 100000*d.hosp_flu/pop;
 		d.pk = d.series + "-" + d.date.getTime();
 		hhsLookup[d.pk] = d;
 	});
@@ -577,10 +614,38 @@ function loadPage(error, vd) {
 	//console.log(uniqueSeries);
 	
 	// add the moving averages
+	hhsCols = ["ip_covid","hosp_icu","hosp_pedi","hosp_flu"];
 	uniqueSeries.forEach(series => {
 		maDays = 7;
 		seriesData = masterData.filter(d => d.series == series);
 		seriesData.sort((a, b) => (a.date > b.date) ? 1 : -1);
+		
+		hhsCols.forEach(col => {
+			let name100k = col + "_100k";
+			let rsName = col + "_rollsum";
+			let rsName100k = col + "_100k_rollsum";
+			let maName = col + "_ma";
+			let maName100k = col + "_100k_ma";
+			
+			seriesData[0][rsName] = seriesData[0][col];
+			seriesData[0][rsName100k] = seriesData[0][name100k];
+
+			for (var i = 1 ; i < seriesData.length ; i++) {
+				seriesData[i][rsName] = seriesData[i-1][rsName] + seriesData[i][col];
+				seriesData[i][rsName100k] = seriesData[i-1][rsName100k] + seriesData[i][name100k];
+			}
+			for (var i = 0 ; i < seriesData.length ; i++) {
+				if (i<maDays) {
+					seriesData[i][maName] = 0;
+					seriesData[i][maName100k] = 0;
+				}
+				else {
+					seriesData[i][maName] = (seriesData[i][rsName]-seriesData[i-maDays][rsName])/maDays;
+					seriesData[i][maName100k] = (seriesData[i][rsName100k]-seriesData[i-maDays][rsName100k])/maDays;
+				}
+			}			
+		}); // look for each column
+		/*
 		seriesData[0].ip_covid_rollsum = seriesData[0].ip_covid;
 		seriesData[0].ip_covid_100k_rollsum = seriesData[0].ip_covid_100k;
 
@@ -598,10 +663,10 @@ function loadPage(error, vd) {
 				seriesData[i].ip_covid_ma = (seriesData[i].ip_covid_rollsum-seriesData[i-maDays].ip_covid_rollsum)/maDays;
 				seriesData[i].ip_covid_100k_ma = (seriesData[i].ip_covid_100k_rollsum-seriesData[i-maDays].ip_covid_100k_rollsum)/maDays;
 			}
-		}
+		}*/
 	});
 	
-	
+	// now that the moving averages are calculated, do the pct change for cases, hosp, deaths
 	uniqueSeries.forEach(series => {
 		seriesData = masterData.filter(d => d.series == series);
 		seriesData.sort((a, b) => (a.date > b.date) ? 1 : -1);
@@ -609,7 +674,6 @@ function loadPage(error, vd) {
 		// clean data - track last good death # for each state
 		lastGoodDeathCt = {};
 		
-		// now that the moving averages are calculated, do the pct change
 		seriesData.forEach((d,i) => {
 			if (d.prior == null) return;
 			if (d.prior.cases_ma != 0){
