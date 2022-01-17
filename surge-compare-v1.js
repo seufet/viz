@@ -86,6 +86,7 @@ var stateNameLookup;
 
 	
 // date parser function
+var parseDateHyphen = d3.timeParse("%Y-%m-%d");
 var parseDate = d3.timeParse("%Y/%m/%d");
 let today = new Date();
 let oneDay = 1000 * 3600 * 24;
@@ -109,6 +110,8 @@ var groups = {
 	hosp_pedi_100k_ma : "Covid Pediatric Hosp (per 100k)",
 	deaths_ma : "Covid Deaths",
 	deaths_100k_ma : "Covid Deaths (per 100k)",
+	occ_hosp_ma : "Hospital % Occupancy",
+	occ_icu_ma : "ICU % Occupancy",
 	hosp_flu_ma : "Influenza Hospitalized",
 	hosp_flu_100k_ma : "Influenza Hospitalized (per 100k)",
 };
@@ -157,8 +160,10 @@ var decimals = {
 	hosp_pedi_100k_ma: 2,
 	deaths_ma : 1,
 	deaths_100k_ma : 2,
-	hosp_flu: 0,
-	hosp_flu_100k: 2
+	hosp_flu_ma: 0,
+	hosp_flu_100k_ma: 2,
+	occ_hosp: 1,
+	occ_icu: 1
 };
 
 var startMonths = {
@@ -205,10 +210,18 @@ function startup(){
 	  .attr("transform",
       "translate(" + margin.left + "," + margin.top + ")");
 		  
-	d3.select("#loadingMsg").html("Loading Hospitalization Data...");
-	d3.csv("https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD", hhsLoaded);
+	d3.select("#loadingMsg").html("Loading Data...");
+	//d3.csv("https://healthdata.gov/api/views/g62h-syeh/rows.csv?accessType=DOWNLOAD", hhsLoaded);
 	
-	makeAllSortable();
+	let dev = false;
+	var url = dev ? "http://localhost:8080/surgeData" : "https://primeval-beaker-319621.ue.r.appspot.com/surgeData";
+	d3.json(url)
+	.then(json => {
+		console.log("Surge data read: " + json.states.length + " states, " + json.master.length + " records");
+		masterData = json.master;
+		statePop = json.states;
+		loadPage();
+	});
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -218,6 +231,40 @@ function startup(){
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // UTILITY FUNCTIONS
+
+// functions from: https://javascript.plainenglish.io/12-important-javascript-functions-every-web-developer-should-know-e488c4bbf521
+// convenience so can write log("it worked");
+const log = console.log.bind(document);
+
+// combines the properties of two objects into one object
+function combineObjects(o1, o2) {
+	return {...o1, ...o2};	
+}
+
+// a random sort to shuffle an array
+function shuffleArray(a) {
+	a.sort(() => Math.random()-0.5);
+}
+
+// test for a number
+function isNum(a) {
+	return !isNaN(parseFloat(a)) && isFinite(a);
+}
+
+// test for a string
+function isStr(a) {
+	return typeof a === 'string';
+}
+
+// check for null or undefined
+function isNull(a) {
+	return a === null || a === undefined;
+}
+
+// remove array duplicates from array
+function removeDuplicates(a) {
+	return [...new Set(a)];
+}
 
 // utility to set value of a select box
 function selectElement(id, valueToSelect) {    
@@ -229,6 +276,16 @@ function selectElement(id, valueToSelect) {
 function elementValue(id) {
 	let element = document.getElementById(id);
 	return element.value;
+}
+
+function checkInt(val) {
+	intVal = parseInt(val);
+	return isFinite(intVal) ? intVal : 0;
+}
+
+function checkFloat(val) {
+	floatVal = parseFloat(val);
+	return isFinite(floatVal) ? floatVal : 0.0;
 }
 
 // add a custom region
@@ -255,7 +312,7 @@ function applyCustomRegion(data, region) {
 				pk:region.abbr+", Year 2"+"-"+d.date.getTime(),
 				cases:0, deaths:0, population:regionPop,
 				cases_ma:0, cases_100k_ma:0, deaths_ma:0, deaths_100k_ma:0, ip_covid:0, ip_covid_100k:0, vaccinated:0,
-				hosp_icu:0, hosp_icu_100k:0, hosp_flu:0, hosp_flu_100k:0, hosp_pedi:0, hosp_pedi_100k:0
+				hosp_icu:0, hosp_icu_100k:0, hosp_flu:0, hosp_flu_100k:0, hosp_pedi:0, hosp_pedi_100k:0, occ_hosp: 0, occ_icu: 0, occ_hosp_ct:0.0, occ_icu_ct:0.0
 			};
 //			if (d.cases_100k_ma != null && d.ip_covid != null && d.vaccine_pct != null){
 				hhsLookup[nextRow.pk] = nextRow;
@@ -273,6 +330,8 @@ function applyCustomRegion(data, region) {
 		nextRow.cases_ma += d.cases_ma;
 		nextRow.deaths_ma += d.deaths_ma;
 		nextRow.vaccinated += (d.vaccine_pct * d.population / 100.0);
+		nextRow.occ_hosp_ct += (d.occ_hosp * d.population);
+		nextRow.occ_icu_ct += (d.occ_hosp * d.population);
 	});
 	//console.log("Region " + region.name + " built with " + regionRows.length);
 	
@@ -284,6 +343,8 @@ function applyCustomRegion(data, region) {
 		d.hosp_flu_100k = 100000*d.hosp_flu/regionPop;
 		d.deaths_100k_ma = 100000*d.deaths_ma/regionPop;
 		d.vaccine_pct = (100.0*d.vaccinated/d.population);
+		d.occ_hosp = d.occ_hosp_ct/d.population;
+		d.occ_icu = d.occ_icu_ct/d.population;
 		//console.log(d.state + " - " + d.dateStr + " - " + d.cases_ma);
 	});
 	
@@ -292,104 +353,13 @@ function applyCustomRegion(data, region) {
 	//console.log(region.name + " cases=" + finalRow.cases_ma + " ip=" + finalRow.ip_covid + " deaths=" + finalRow.deaths_ma);
 	
 	return regionRows;
-	
-	/*// last date with all data for the first state
-	st = data.filter(d => d.state == region.states[0] && d.surge == "Year 2");
-	st.sort((a, b) => (a.date > b.date) ? 1 : -1);
-	idx = st.length-1;
-	while (st[idx].cases_100k_ma == null || 
-		st[idx].ip_covid == null ||
-		st[idx].vaccine_pct == null) idx--; // find last day with all data present
-	lastDate = st[idx].date;
-	console.log("Region last day:" + lastDate);*/
-	/*
-	let newDate = new Date(d.date.getFullYear()+1,d.date.getMonth(),d.date.getDate());
-		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+d.date.getTime()]);
-		
-		// if prior row exists, add it to the priorYear array
-		if (priorRow != null) {
-			priorRow.surge = "Year 1";
-			priorRow.series = d.state + ", " + priorRow.surge;
-			priorRow.date = newDate;
-			priorRow.dateStr = d.dateStr;
-			priorRow.pk = priorRow.series + "-" + priorRow.date.getTime();
-			priorYear.push(priorRow);
-			
-			d.prior = priorRow;
-		}*/
-/*
-	// cases
-	oldCases = (d3.sum(oneYearAgo, d=>d.cases_ma)*100000/usPop);
-	cases = (d3.sum(lastDay, d=>d.cases_ma)*100000/usPop);
-	casesPct = oldCases == 0 ? "Infinite (previous value=0)" : tablePctValue(cases/oldCases);
-	
-	hosp = movingAverage(data, "ip_covid", lastDate, 7)*100000/usPop;
-	oldHosp = movingAverage(data, "ip_covid", oneYearAgoDate, 7)*100000/usPop;
-	hospPct = oldHosp == 0 ? "Infinite (previous value=0)" : tablePctValue(hosp/oldHosp);
-
-	// deaths
-	oldDeaths = (d3.sum(oneYearAgo, d=>d.deaths_ma)*100000/usPop);
-	deaths = (d3.sum(lastDay, d=>d.deaths_ma)*100000/usPop);
-	deathsPct = oldDeaths == 0 ? "Infinite (previous value=0)" : tablePctValue(deaths/oldDeaths);
-	
-	// vaccines
-	totalVac = 0.0;
-	lastDay.forEach((d,i) => {
-		if (popLookup[d.state] != null){
-			totalVac += parseFloat(d.vaccine_pct)*popLookup[d.state]/100.0;
-		}
-	});
-	vacPct = 100.0*totalVac/usPop;
-	
-	
-	tbl = [];
-	tbl[0] = "United States";
-	tbl[1] = cases.toFixed(1);
-	tbl[2] = oldCases == 0 ? "Infinite (previous value=0)" : tablePctValue(cases/oldCases);
-	tbl[3] = hosp.toFixed(1);
-	tbl[4] = oldHosp == 0 ? "Infinite (previous value=0)" : tablePctValue(hosp/oldHosp);
-	tbl[5] = deaths.toFixed(2);
-	tbl[6] = oldDeaths == 0 ? "Infinite (previous value=0)" : tablePctValue(deaths/oldDeaths);
-	tbl[7] = vacPct.toFixed(1) + "%";
-	tblData.push(tbl);*/
 }
 
-
-// Chained callback functions to read the data
-function hhsLoaded(error, data) {
-	console.log("hhsLoaded: " + data.length);
-	hhsData =  data;
-		
-	d3.select("#loadingMsg").html("Loading State Demographic Data...");
-	d3.csv("https://seufet.github.io/viz/state_pop.csv", statePopLoaded);
-}
-
-function statePopLoaded(error, data) {
-	statePop = data;
-	console.log("statePopData: " + statePop.length);
-	
-	// Credit: NY Times, https://github.com/nytimes/covid-19-data
-	// Download: https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv	
-	//d3.csv("nyt_data.csv", loadPage);
-	d3.select("#loadingMsg").html("Loading Cases/Deaths Data...");
-	d3.csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/rolling-averages/us-states.csv", nytLoaded);
-}
-
-function nytLoaded(error, nyt) {
-//	-vaccination: https://data.cdc.gov/api/views/unsk-b7fc/rows.csv?accessType=DOWNLOAD, 
-	// save data
-	nytData = nyt;
-	console.log("nytData: " + nytData.length);
-	
-	d3.select("#loadingMsg").html("Loading Vaccination Data...");
-	d3.csv("https://data.cdc.gov/api/views/unsk-b7fc/rows.csv?accessType=DOWNLOAD", loadPage);
-}
 
 // Finish getting the page ready after our data sets are loaded
-function loadPage(error, vd) {
-	// save vaccine data 
-	vaccineData = vd;
-	console.log("vaccineData: " + vaccineData.length);
+function loadPage() {
+	// make all tables sortable
+	makeAllSortable();
 	
 	// Update loader
 	d3.select("#loadingMsg").html("Processing Data...");
@@ -438,90 +408,17 @@ function loadPage(error, vd) {
 	selectElement("selectButton",defaultData);
 	groupSelected = defaultData;
 
-	// prepare a lookup for the vaccination info
-	let vaccineLookup = {};
-	vaccineData.forEach(d => {
-			var mdyDate = d3.timeParse("%m/%d/%Y");
-			let pk = d.Location + "-" + mdyDate(d.Date).getTime();
-			vaccineLookup[pk] = d;
+	// parse and clean the incoming data
+	masterData.forEach(row => {
+		row.date = parseDateHyphen(row.dateStr);
+		row.ip_covid = checkInt(row.ip_covid);
+		row.hosp_icu = checkInt(row.hosp_icu);
+		row.hosp_pedi = checkInt(row.hosp_pedi);
+		row.hosp_flu = checkInt(row.hosp_flu);
+		row.occ_hosp = checkFloat(row.occ_hosp);
+		row.occ_icu = checkFloat(row.occ_icu);
+		hhsLookup[row.pk] = row;
 	});
-
-	// prepare a lookup for the nyt info, note we leave date as a yyyy-mm-dd string
-	// nyt data set uses full state names, so we have to map
-	let nytLookup = {};
-	nytData.forEach(d => {
-		let pk = stateNameLookup[d.state] + "-" + d.date;
-		nytLookup[pk] = d;
-	});
-	
-	// keep only needed columns from hhs data
-	//-ICU: adult_icu_bed_covid_utilization_numerator
-	//-Pedi: total_pediatric_patients_hospitalized_confirmed_and_suspected_covid
-	//-Flu: total_patients_hospitalized_confirmed_influenza
-	masterData = [];
-	hhsData.forEach(d => {
-		let row = {};
-		row.date = parseDate(d.date);
-		row.dateStr = d.date.replace(/\//g,"-"); // replace / with -
-		row.state = d.state;
-		row.ip_covid = parseInt(d.inpatient_beds_used_covid);
-		row.hosp_icu = parseInt(d.staffed_icu_adult_patients_confirmed_and_suspected_covid);
-		row.hosp_pedi = parseInt(d.total_pediatric_patients_hospitalized_confirmed_and_suspected_covid);
-		row.hosp_flu = parseInt(d.total_patients_hospitalized_confirmed_influenza);
-		if (!isFinite(row.ip_covid)) row.ip_covid = 0;
-		if (!isFinite(row.hosp_icu)) row.hosp_icu = 0;
-		if (!isFinite(row.hosp_flu)) row.hosp_flu = 0;
-		if (!isFinite(row.hosp_pedi)) row.hosp_pedi = 0;
-		//if (row.state == "MA") console.log(row.dateStr + " ICU:" + row.hosp_icu + "-" + d.staffed_icu_adult_patients_confirmed_and_suspected_covid);
-		//if (row.state == "MA") console.log(row.dateStr + " Pedi:" + row.hosp_pedi + "-" + d.total_pediatric_patients_hospitalized_confirmed_and_suspected_covid);
-		//if (row.state == "MA") console.log(row.dateStr + " Flu:" + row.hosp_flu + "-" + d.total_patients_hospitalized_confirmed_influenza);
-		masterData.push(row);
-	});
-	hhsData = null;
-	
-	// build a record lookup by date
-	let vaccineGood = 0, vaccineBad = 0;
-	let lastVaxByState = {};
-	masterData.sort((a, b) => (a.date > b.date) ? 1 : -1);
-	masterData.forEach(d => {
-		d.surge = "Year 2";
-		d.series = d.state + ", " + d.surge;
-		//d.deaths_covid = parseInt(d.deaths_covid);
-		
-		nytRow = nytLookup[d.state + "-" + d.dateStr];
-		if (nytRow != null) {
-			d.cases = parseFloat(nytRow.cases);
-			d.cases_ma = parseFloat(nytRow.cases_avg);
-			d.cases_100k_ma = parseFloat(nytRow.cases_avg_per_100k);
-			d.deaths = parseFloat(nytRow.deaths);
-			d.deaths_ma = parseFloat(nytRow.deaths_avg);
-			d.deaths_100k_ma = parseFloat(nytRow.deaths_avg_per_100k);
-			//if (d.state == "MA") console.log(d.dateStr + "-" + d.cases);
-		} else {
-			//console.log("missing nyt data: " + d.state + "-" + d.dateStr);
-		}
-		
-		vaccineRow = vaccineLookup[d.state + "-" + d.date.getTime()];
-		if (vaccineRow != null) {
-			d.vaccine_pct = parseFloat(vaccineRow.Series_Complete_Pop_Pct);
-			lastVaxByState[d.state] = d.vaccine_pct;
-			vaccineGood++;
-		} else {
-			vaccineBad++;
-			// if vaccine data missing for a date, use last good value
-			if (lastVaxByState[d.state] != null) d.vaccine_pct = lastVaxByState[d.state];
-		}
-		
-		pop = popLookup[d.state];
-		d.population = pop;
-		d.ip_covid_100k = 100000*d.ip_covid/pop;
-		d.hosp_icu_100k = 100000*d.hosp_icu/pop;
-		d.hosp_pedi_100k = 100000*d.hosp_pedi/pop;
-		d.hosp_flu_100k = 100000*d.hosp_flu/pop;
-		d.pk = d.series + "-" + d.date.getTime();
-		hhsLookup[d.pk] = d;
-	});
-	//console.log("vaccine good: " + vaccineGood + " - vaccineBad: " + vaccineBad);
 
 	// Then add aggregations for US, regions here
 	//console.log("length before custom regions: " + masterData.length);
@@ -614,7 +511,8 @@ function loadPage(error, vd) {
 	//console.log(uniqueSeries);
 	
 	// add the moving averages
-	hhsCols = ["ip_covid","hosp_icu","hosp_pedi","hosp_flu"];
+	hhsCols = ["ip_covid","hosp_icu","hosp_pedi","hosp_flu","occ_hosp","occ_icu"];
+	popAdjCols = ["ip_covid","hosp_icu","hosp_pedi","hosp_flu"];
 	uniqueSeries.forEach(series => {
 		maDays = 7;
 		seriesData = masterData.filter(d => d.series == series);
@@ -632,16 +530,16 @@ function loadPage(error, vd) {
 
 			for (var i = 1 ; i < seriesData.length ; i++) {
 				seriesData[i][rsName] = seriesData[i-1][rsName] + seriesData[i][col];
-				seriesData[i][rsName100k] = seriesData[i-1][rsName100k] + seriesData[i][name100k];
+				if (popAdjCols.includes(col)) seriesData[i][rsName100k] = seriesData[i-1][rsName100k] + seriesData[i][name100k];
 			}
 			for (var i = 0 ; i < seriesData.length ; i++) {
 				if (i<maDays) {
 					seriesData[i][maName] = 0;
-					seriesData[i][maName100k] = 0;
+					if (popAdjCols.includes(col)) seriesData[i][maName100k] = 0;
 				}
 				else {
 					seriesData[i][maName] = (seriesData[i][rsName]-seriesData[i-maDays][rsName])/maDays;
-					seriesData[i][maName100k] = (seriesData[i][rsName100k]-seriesData[i-maDays][rsName100k])/maDays;
+					if (popAdjCols.includes(col)) seriesData[i][maName100k] = (seriesData[i][rsName100k]-seriesData[i-maDays][rsName100k])/maDays;
 				}
 			}			
 		}); // look for each column
@@ -1003,7 +901,6 @@ function updateStandard(data){
 		
 	// compute max dates	
 	console.log("hhs max date: " + d3.max(data, d => d.date));
-	console.log("nyt max date: " + d3.max(nytData, d => d.date));
 }
 
   
