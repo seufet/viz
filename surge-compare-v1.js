@@ -309,7 +309,7 @@ function applyCustomRegion(data, region) {
 		if (curDate == null || curDate.getTime() != d.date.getTime()){
 			nextRow = {
 				state:region.abbr, surge:"Year 2", series:region.abbr+", Year 2", date:d.date, dateStr:d.dateStr, 
-				pk:region.abbr+", Year 2"+"-"+d.date.getTime(),
+				pk:region.abbr+", Year 2"+"-"+d.dateStr,
 				cases:0, deaths:0, population:regionPop,
 				cases_ma:0, cases_100k_ma:0, deaths_ma:0, deaths_100k_ma:0, ip_covid:0, ip_covid_100k:0, vaccinated:0,
 				hosp_icu:0, hosp_icu_100k:0, hosp_flu:0, hosp_flu_100k:0, hosp_pedi:0, hosp_pedi_100k:0, occ_hosp: 0, occ_icu: 0, occ_hosp_ct:0.0, occ_icu_ct:0.0
@@ -455,7 +455,7 @@ function loadPage() {
 		// make a copy of the data for a year earlier than d, and add it to the priorYear array with a modified state name
 		// this enables us to have lines for the same state/date, but with the prior year records having a false date
 		let priorDate = new Date(d.date.getFullYear()-1,d.date.getMonth(),d.date.getDate());
-		let lookup = hhsLookup[d.series+"-"+priorDate.getTime()];
+		let lookup = hhsLookup[d.series+"-"+priorDate.toISOString().substring(0,10)];
 		
 		// if prior row exists, add it to the priorYear array
 		if (lookup != null) {
@@ -482,7 +482,7 @@ function loadPage() {
 	});
 	peekData.forEach(d => {
 		let newDate = new Date(d.date.getFullYear()+1,d.date.getMonth(),d.date.getDate());
-		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+d.date.getTime()]);
+		let priorRow = Object.assign({}, hhsLookup[d.series+"-"+d.date.toISOString().substring(0,10)]);
 		
 		// if prior row exists, add it to the priorYear array
 		if (priorRow != null) {
@@ -969,7 +969,14 @@ function updateTooltipContentStandard(mouse) {
 		var row = d.values[idx];
 		if (row == null || row[groupSelected] == null) return "";	
 		var pctChgMsg = "";
-		if (row.surge == "Year 2" && row[groupSelected] != null && row.prior[groupSelected] != null){	
+		
+		
+		
+		
+		if (row.surge == "Year 2" && 
+			row[groupSelected] != null 
+			&& row.prior != null 
+			&& row.prior[groupSelected] != null){	
 			let pctChg = 100*(row[groupSelected]/row.prior[groupSelected]-1);
 			pctChgMsg = " (" + Math.abs(pctChg.toFixed(0)) + "% " + (pctChg>0 ? "Up" : "Down");
 			if (row.vaccine_pct != null) pctChgMsg += ", " + row.vaccine_pct.toFixed(0) + "% Vacc)";
