@@ -50,6 +50,10 @@
 ////////////////////////////////////////////////////////////////////////
 // GLOBALS
 
+// the URL query string/parameters
+const queryString = window.location.search;
+const queryParams = new URLSearchParams(queryString);	
+
 // title prefix
 var titlePrefix = "Comparison by Year: ";
 var lastSeriesLength = 0;
@@ -355,6 +359,48 @@ function applyCustomRegion(data, region) {
 	return regionRows;
 }
 
+/*
+	window.location.href returns the href (URL) of the current page
+window.location.hostname returns the domain name of the web host
+window.location.pathname returns the path and filename of the current page
+window.location.protocol returns the web protocol used (http: or https:)
+
+*/
+function generateUrl(){
+	let start = window.location.protocol + "//" + window.location.hostname + window.location.pathname + "?";
+	
+	start += "data=" + elementValue("selectButton");
+	start += "&startDate=" + elementValue("startDateButton");
+	start += "&month=" + elementValue("monthsButton");
+	
+	for (i=0; i<5; i++){
+		let key = "state"+(i+1);
+		start += "&" + key + "=" + elementValue(key);
+	}
+	console.log("URL: " + start);
+}
+
+// Utility returns the (first) value of url param for a key, or def if not found
+function urlParam(key, def){
+	return queryParams.has(key) ? queryParams.get(key) : def;
+}
+
+function applyDefaultValues(){
+	selectElement("monthsButton",urlParam("month",defaultNumMonths));
+	selectElement("startDateButton",urlParam("startDate",defaultStartDate));
+	
+	groupSelected = urlParam("data",defaultData);
+	selectElement("selectButton",groupSelected);
+
+	// default values for states
+	statesSelected = defaultStatesSelected;
+	for (i=0; i<statesSelected.length; i++){
+		if (statesSelected[i] != null) {
+			let key = "state"+(i+1);
+			selectElement(key,urlParam(key,statesSelected[i]));
+		}
+	}
+}
 
 // Finish getting the page ready after our data sets are loaded
 function loadPage() {
@@ -402,12 +448,7 @@ function loadPage() {
 		.append('option')
 	  .text(d => d) // text showed in the menu
 	  .attr("value", d => d) // co2responding value returned by the button
-	selectElement("monthsButton",defaultNumMonths);
-
-	selectElement("startDateButton",defaultStartDate);
-	selectElement("selectButton",defaultData);
-	groupSelected = defaultData;
-
+	  
 	// parse and clean the incoming data
 	masterData.forEach(row => {
 		row.date = parseDateHyphen(row.dateStr);
@@ -438,14 +479,8 @@ function loadPage() {
 	  .text(d => d) // text showed in the menu
 	  .attr("value", d => stateNameLookup[d]) // co2responding value returned by the button
 
-	// default values for states
-	statesSelected = defaultStatesSelected;
-	for (i=0; i<statesSelected.length; i++){
-		if (statesSelected[i] != null) {
-			selectElement("state"+(i+1),statesSelected[i]);
-		}
-	}
-	
+	// set the initial values for the controls
+	applyDefaultValues();
 
 	// prior year records
 	let priorYear = [];
@@ -665,6 +700,9 @@ function update() {
 
 	//////////////////////////////////////////////////////////////////
 	// read input
+	
+	// generate Url to re-visit options
+	generateUrl();
 	
 	// process state selections
 	statesSelected = [];
