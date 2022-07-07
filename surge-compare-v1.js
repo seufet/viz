@@ -181,13 +181,17 @@ var startMonths = {
 	"December, 2021":"2021/12/01",
 	"January, 2022":"2022/01/01",
 	"February, 2022":"2022/02/01",
-	"March, 2022":"2022/03/01"
+	"March, 2022":"2022/03/01",
+	"April, 2022":"2022/04/01",
+	"May, 2022":"2022/05/01",
+	"June, 2022":"2022/06/01",
+	"July, 2022":"2022/07/01"
 };
 
 // basic configuration
 var defaultStatesSelected = ["MA","US","XX","XX","XX"];
 var statesSelected;
-var defaultStartDate = "2021/12/01";
+var defaultStartDate = "2022/03/01";
 var defaultNumMonths = 6;
 var defaultData = "ip_covid_100k_ma";
 var paletteStr = "blue,black,red,brown,lightgreen";
